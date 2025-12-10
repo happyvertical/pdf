@@ -1,7 +1,7 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "files": {
-    "includes": [
+    "include": [
       "src/**/*.{js,ts,tsx,jsx}",
       "test/**/*.{js,ts,tsx,jsx}",
       "*.{js,ts,tsx,jsx}"
@@ -84,7 +84,7 @@
   },
   "overrides": [
     {
-      "includes": [
+      "include": [
         "**/*.test.ts",
         "**/*.test.tsx",
         "**/*.spec.ts",
@@ -110,7 +110,7 @@
       }
     },
     {
-      "includes": [
+      "include": [
         "**/vite.config.ts",
         "**/vitest.config.ts",
         "**/*.config.ts",
