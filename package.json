@@ -1,0 +1,66 @@
+{
+  "name": "@happyvertical/pdf",
+  "version": "0.60.2",
+  "description": "Modern PDF processing utilities with text extraction and OCR support using unpdf and @happyvertical/ocr",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/happyvertical/pdf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/happyvertical/pdf/issues"
+  },
+  "homepage": "https://github.com/happyvertical/pdf#readme",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run --testTimeout 120000",
+    "test:watch": "vitest --testTimeout 120000",
+    "build": "vite build",
+    "build:watch": "vite build --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src/",
+    "format": "biome format --write src/",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "dev": "npm run build:watch & npm run test:watch",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish"
+  },
+  "dependencies": {
+    "@happyvertical/ocr": "^0.60.2",
+    "@happyvertical/utils": "^0.60.2",
+    "pdf-to-png-converter": "^3.11.0",
+    "unpdf": "^1.4.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@changesets/cli": "^2.29.8",
+    "@types/node": "24.10.0",
+    "typescript": "^5.9.3",
+    "vite": "7.2.7",
+    "vite-plugin-dts": "4.5.4",
+    "vitest": "^4.0.8"
+  }
+}

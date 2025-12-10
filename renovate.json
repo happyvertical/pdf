@@ -1,0 +1,3 @@
+{
+  "extends": ["local>happyvertical/renovate-config:default"]
+}
