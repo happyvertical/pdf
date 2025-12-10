@@ -1,0 +1,28 @@
+# Lefthook Git Hooks Configuration
+# https://github.com/evilmartians/lefthook
+
+# Pre-commit hook: Auto-format and fix staged files
+pre-commit:
+  commands:
+    format:
+      glob: "*.{js,jsx,ts,tsx}"
+      run: pnpm biome check --write {staged_files}
+      stage_fixed: true
+
+# Commit-msg hook: Validate commit message format
+# Skipped in CI to allow semantic-release commits
+commit-msg:
+  commands:
+    validate:
+      skip:
+        - run: "[ \"$CI\" = \"true\" ]"
+      run: npx --no-install commitlint --edit {1}
+
+# Pre-push hook: Run checks before pushing
+pre-push:
+  commands:
+    typecheck:
+      run: pnpm typecheck
+      skip:
+        - merge
+        - rebase

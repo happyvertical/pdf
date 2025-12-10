@@ -46,7 +46,8 @@
     "dev": "npm run build:watch & npm run test:watch",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "changeset publish"
+    "changeset:publish": "changeset publish",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@happyvertical/ocr": "^0.60.2",
@@ -57,7 +58,10 @@
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "@changesets/cli": "^2.29.8",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@types/node": "24.10.0",
+    "lefthook": "^1.11.13",
     "typescript": "^5.9.3",
     "vite": "7.2.7",
     "vite-plugin-dts": "4.5.4",
