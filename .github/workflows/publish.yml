@@ -109,7 +109,7 @@ jobs:
         if: steps.version-check.outputs.changed == 'true'
         run: pnpm run changeset:publish
         env:
-          NODE_AUTH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Push changes and tag
         if: steps.version-check.outputs.changed == 'true'
