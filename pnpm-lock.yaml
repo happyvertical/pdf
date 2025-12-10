@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@happyvertical/ocr':
-        specifier: ^0.60.2
-        version: 0.60.2
+        specifier: ^0.60.4
+        version: 0.60.4
       '@happyvertical/utils':
         specifier: ^0.60.2
         version: 0.60.2
@@ -583,8 +583,9 @@ packages:
   '@gutenye/ocr-node@1.4.8':
     resolution: {integrity: sha512-Ej6hHQSrBLCY74Qb2rRYZ0v97kp3h1Q8obLdQDM208ft9BOyqj+aUN2yTYQ/1c/BO695OWDgufRSiWiLB92KLw==}
 
-  '@happyvertical/ocr@0.60.2':
-    resolution: {integrity: sha512-YyS0CyuCKq5BK3rq386gR4dZ3ie79OesL65eZpBLmRZi3YL8XI+IAioguefLn9iukDpQYptmY9VXrEc9RtBpeQ==, tarball: https://npm.pkg.github.com/download/@happyvertical/ocr/0.60.2/e780bf3eb823ac67d50afbcf2cc8a0fea16fa2b1}
+  '@happyvertical/ocr@0.60.4':
+    resolution: {integrity: sha512-wokfS4JaMnzEPhLv4DfCHHfb/Le+gyLPsWSWumfOFK30sJm+2mbTbH8eKr5gq06eTI0sTNgGeeIpeO0SBBeKdg==, tarball: https://npm.pkg.github.com/download/@happyvertical/ocr/0.60.4/04e5a0a9ad56783515416f6d1ec32ac53543c83a}
+    engines: {node: '>=24', pnpm: '>=9'}
 
   '@happyvertical/utils@0.60.2':
     resolution: {integrity: sha512-O545bmkf++TAfCP/MbXV/U0ucx+6TRi4dsiOpOO92xnu6N8kNPBVsZ2Kt+M1XBwhRLuhE0Y0lBBpXFm021+18A==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.60.2/0e25ff142cbf8c3e24c7cfa014b0a1155896fe8f}
@@ -2743,7 +2744,7 @@ snapshots:
       onnxruntime-node: 1.23.2
       sharp: 0.33.5
 
-  '@happyvertical/ocr@0.60.2':
+  '@happyvertical/ocr@0.60.4':
     dependencies:
       '@gutenye/ocr-node': 1.4.8
       '@happyvertical/utils': 0.60.2
