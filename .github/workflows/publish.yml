@@ -11,17 +11,17 @@ concurrency:
 permissions:
   contents: write
   packages: write
-  pull-requests: write
 
 jobs:
   test:
     name: Test
     uses: ./.github/workflows/test.yml
 
-  publish:
-    name: Publish Package
+  release:
+    name: Version and Publish
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Generate GitHub App Token
@@ -31,7 +31,7 @@ jobs:
           app-id: ${{ secrets.HAVE_RELEASE_APP_ID }}
           private-key: ${{ secrets.HAVE_RELEASE_APP_PRIVATE_KEY }}
 
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -66,18 +66,65 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ steps.app-token.outputs.token }}
 
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Validate version < 1.0.0
+        run: |
+          version=$(node -p "require('./package.json').version")
+          major=$(echo "$version" | cut -d. -f1)
+          if [ "$major" -ge 1 ]; then
+            echo "ERROR: Version >= 1.0.0 requires manual release"
+            exit 1
+          fi
+          echo "Version is 0.x.x - safe to proceed with automated releases"
+
+      - name: Auto-generate changeset
+        run: pnpm run changeset:auto
+
+      - name: Version packages
+        run: pnpm run changeset:version
+
+      - name: Check for version changes
+        id: version-check
+        run: |
+          if git diff --quiet package.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build
+        if: steps.version-check.outputs.changed == 'true'
         run: pnpm build
 
-      - name: Create Release Pull Request or Publish
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          publish: pnpm changeset:publish
-          version: pnpm changeset:version
-          commit: 'chore(release): version packages'
-          title: 'chore(release): version packages'
+      - name: Commit release
+        if: steps.version-check.outputs.changed == 'true'
+        run: |
+          git add .
+          git commit -m "chore(release): v${{ steps.version-check.outputs.version }} [skip ci]"
+
+      - name: Publish to GitHub Packages
+        if: steps.version-check.outputs.changed == 'true'
+        run: pnpm run changeset:publish
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           NODE_AUTH_TOKEN: ${{ steps.app-token.outputs.token }}
-          NPM_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Push changes and tag
+        if: steps.version-check.outputs.changed == 'true'
+        run: |
+          git tag "v${{ steps.version-check.outputs.version }}"
+          git push origin main
+          git push origin "v${{ steps.version-check.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.version-check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh release create "v${{ steps.version-check.outputs.version }}" \
+            --title "v${{ steps.version-check.outputs.version }}" \
+            --generate-notes

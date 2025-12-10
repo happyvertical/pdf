@@ -7,8 +7,8 @@
   "types": "./dist/index.d.ts",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=24.0.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=24",
+    "pnpm": ">=9"
   },
   "files": [
     "dist",
@@ -45,6 +45,7 @@
     "clean": "rm -rf dist *.tsbuildinfo",
     "dev": "npm run build:watch & npm run test:watch",
     "changeset": "changeset",
+    "changeset:auto": "npx tsx scripts/auto-changeset.ts",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",
     "prepare": "lefthook install"
@@ -62,6 +63,7 @@
     "@commitlint/config-conventional": "^19.8.1",
     "@types/node": "24.10.0",
     "lefthook": "^1.11.13",
+    "tsx": "^4.20.0",
     "typescript": "^5.9.3",
     "vite": "7.2.7",
     "vite-plugin-dts": "4.5.4",
