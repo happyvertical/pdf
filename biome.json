@@ -30,8 +30,7 @@
       },
       "correctness": {
         "noUnusedVariables": "warn",
-        "noUnusedImports": "warn",
-        "useParseIntRadix": "warn"
+        "noUnusedImports": "warn"
       },
       "style": {
         "noNonNullAssertion": "warn",
