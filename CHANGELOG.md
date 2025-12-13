@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.60.4
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - resolve pdfjs-dist version mismatch breaking OCR fallback (deps)
+
 ## 0.60.3
 
 ### Patch Changes
