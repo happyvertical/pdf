@@ -10,6 +10,11 @@
     "node": ">=24",
     "pnpm": ">=9"
   },
+  "pnpm": {
+    "overrides": {
+      "pdfjs-dist": "5.4.296"
+    }
+  },
   "files": [
     "dist",
     "README.md",
@@ -53,7 +58,7 @@
   "dependencies": {
     "@happyvertical/ocr": "^0.60.4",
     "@happyvertical/utils": "^0.60.2",
-    "pdf-to-png-converter": "^3.11.0",
+    "pdf-to-png-converter": "^3.10.0",
     "unpdf": "^1.4.0"
   },
   "devDependencies": {

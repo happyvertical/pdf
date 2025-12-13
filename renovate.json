@@ -1,3 +1,11 @@
 {
-  "extends": ["local>happyvertical/renovate-config:default"]
+  "extends": ["local>happyvertical/renovate-config:default"],
+  "packageRules": [
+    {
+      "description": "Group PDF processing deps - pdfjs-dist must match version bundled in unpdf",
+      "groupName": "pdf processing (requires version sync)",
+      "matchPackageNames": ["unpdf", "pdf-to-png-converter", "pdfjs-dist"],
+      "dependencyDashboardApproval": true
+    }
+  ]
 }

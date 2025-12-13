@@ -30,7 +30,7 @@ describe.skipIf(process.env.CI === 'true')(
       }
     });
 
-    it('should extract text from real PDF using OCR when needed', async () => {
+    it('should extract text from scanned PDF using OCR', async () => {
       const pdfPath = join(
         fileURLToPath(new URL('.', import.meta.url)),
         '..',
@@ -38,107 +38,70 @@ describe.skipIf(process.env.CI === 'true')(
         'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
       );
 
-      // First check what the PDF analysis recommends
+      // Verify this is a scanned PDF that requires OCR
       const info = await reader.getInfo(pdfPath);
-      console.log('PDF Analysis:', {
-        pageCount: info.pageCount,
-        hasEmbeddedText: info.hasEmbeddedText,
-        recommendedStrategy: info.recommendedStrategy,
-        ocrRequired: info.ocrRequired,
-      });
+      expect(info.ocrRequired).toBe(true);
+      expect(info.recommendedStrategy).toBe('ocr');
 
-      // Extract text - should work regardless of whether OCR is available
+      // Extract text - this MUST work for scanned PDFs
       const text = await reader.extractText(pdfPath);
 
-      // Basic validation
-      expect(text !== undefined).toBe(true);
-      expect(typeof text === 'string' || text === null).toBe(true);
+      // OCR must return actual text content, not null or empty
+      expect(text).not.toBeNull();
+      expect(text).toBeDefined();
+      expect(typeof text).toBe('string');
 
-      if (ocrAvailable && info.ocrRequired) {
-        // If OCR is available and required, we should attempt OCR
-        // But OCR might fail due to image format issues, which is acceptable
-        if (text && text.length > 10) {
-          console.log(
-            `✅ OCR successfully extracted ${text.length} characters`,
-          );
-          console.log(
-            `Preview: ${text.substring(0, 200).replace(/\s+/g, ' ').trim()}...`,
-          );
-        } else {
-          console.log(
-            '⚠️ OCR attempted but extracted minimal/no text (may be due to image format issues)',
-          );
-          // This is acceptable - OCR can fail on certain image formats
-        }
-      } else if (!ocrAvailable && info.ocrRequired) {
-        // If OCR is not available but required, text extraction might return null
-        console.log(
-          '⚠️ OCR required but not available - text extraction may return null',
-        );
-      } else {
-        // Text-based PDF or hybrid - should extract some text
-        if (text) {
-          console.log(
-            `✅ Text extracted without OCR: ${text.length} characters`,
-          );
-        }
+      // Must extract meaningful content (at least 100 chars from a 3-page document)
+      expect(text!.length).toBeGreaterThan(100);
+
+      // Should contain expected content from the meeting minutes
+      // (Bentley is the town name that appears in the document)
+      expect(text!.toLowerCase()).toContain('bentley');
+
+      console.log(`✅ OCR extracted ${text!.length} characters`);
+      console.log(
+        `Preview: ${text!.substring(0, 200).replace(/\s+/g, ' ').trim()}...`,
+      );
+    }, 60000);
+
+    it('should perform OCR on extracted images', async () => {
+      if (!ocrAvailable) {
+        console.log('⏭️ Skipping - OCR not available');
+        return;
       }
-    }, 45000); // Allow up to 45 seconds for OCR processing
 
-    it.skipIf(process.env.CI === 'true')(
-      'should handle OCR on extracted images',
-      async () => {
-        if (!ocrAvailable) {
-          console.log('⏭️ Skipping OCR image test - OCR not available');
-          return;
-        }
+      const pdfPath = join(
+        fileURLToPath(new URL('.', import.meta.url)),
+        '..',
+        'test',
+        'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
+      );
 
-        const pdfPath = join(
-          fileURLToPath(new URL('.', import.meta.url)),
-          '..',
-          'test',
-          'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
-        );
+      // Extract embedded images from the PDF
+      const images = await reader.extractImages(pdfPath);
 
-        // Extract images from the PDF
-        const images = await reader.extractImages(pdfPath);
-        console.log(`Extracted ${images.length} images from PDF`);
+      // Scanned PDF should have embedded images
+      expect(images.length).toBeGreaterThan(0);
+      console.log(`Extracted ${images.length} embedded images from PDF`);
 
-        if (images.length > 0) {
-          // Take just the first image to keep test fast
-          const firstImage = images.slice(0, 1);
+      // Perform OCR on the first image
+      const firstImage = images.slice(0, 1);
+      const ocrResult = await reader.performOCR(firstImage, {
+        language: 'eng',
+        confidenceThreshold: 50,
+      });
 
-          // Perform OCR on the first image
-          const ocrResult = await reader.performOCR(firstImage, {
-            language: 'eng',
-            confidenceThreshold: 50,
-          });
+      expect(ocrResult).toBeDefined();
+      expect(typeof ocrResult.text).toBe('string');
+      expect(typeof ocrResult.confidence).toBe('number');
 
-          expect(ocrResult).toBeDefined();
-          expect(typeof ocrResult.text).toBe('string');
-          expect(typeof ocrResult.confidence).toBe('number');
-          expect(Array.isArray(ocrResult.detections)).toBe(true);
+      // Should extract some text (embedded images may be logos/headers, not full pages)
+      expect(ocrResult.text.length).toBeGreaterThan(0);
+      expect(ocrResult.confidence).toBeGreaterThan(50);
 
-          if (ocrResult.text.length > 10) {
-            console.log(
-              `✅ OCR on image successful: ${ocrResult.text.length} chars, ${ocrResult.confidence}% confidence`,
-            );
-            console.log(
-              `OCR text preview: ${ocrResult.text.substring(0, 100).replace(/\s+/g, ' ').trim()}...`,
-            );
-          } else {
-            console.log(
-              `⚠️ OCR on image extracted minimal text: ${ocrResult.text.length} chars, ${ocrResult.confidence}% confidence`,
-            );
-            console.log(
-              'This may be due to image format compatibility or image content',
-            );
-          }
-        } else {
-          console.log('⚠️ No images found in PDF - OCR image test skipped');
-        }
-      },
-      45000,
-    );
+      console.log(
+        `✅ OCR on embedded image: "${ocrResult.text}" (${ocrResult.confidence.toFixed(1)}% confidence)`,
+      );
+    }, 60000);
   },
 );
