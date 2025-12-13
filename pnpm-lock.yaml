@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  pdfjs-dist: 5.4.296
+
 importers:
 
   .:
@@ -15,7 +18,7 @@ importers:
         specifier: ^0.60.2
         version: 0.60.2
       pdf-to-png-converter:
-        specifier: ^3.11.0
+        specifier: ^3.10.0
         version: 3.11.0
       unpdf:
         specifier: ^1.4.0
@@ -1828,8 +1831,8 @@ packages:
     resolution: {integrity: sha512-9V4seNenywRMGKX2AQX2IHdxUxTBffqfGNtozQjx2RokePG/TjvwABGfr7tozmWkmc4oAsO2q2RL6lFp5Bqxhw==}
     engines: {node: '>=20'}
 
-  pdfjs-dist@5.4.449:
-    resolution: {integrity: sha512-CegnUaT0QwAyQMS+7o2POr4wWUNNe8VaKKlcuoRHeYo98cVnqPpwOXNSx6Trl6szH02JrRcsPgletV6GmF3LtQ==}
+  pdfjs-dist@5.4.296:
+    resolution: {integrity: sha512-DlOzet0HO7OEnmUmB6wWGJrrdvbyJKftI1bhMitK7O2N8W2gc757yyYBbINy9IDafXAV9wmKr9t7xsTaNKRG5Q==}
     engines: {node: '>=20.16.0 || >=22.3.0'}
 
   picocolors@1.1.1:
@@ -3890,9 +3893,9 @@ snapshots:
   pdf-to-png-converter@3.11.0:
     dependencies:
       '@napi-rs/canvas': 0.1.84
-      pdfjs-dist: 5.4.449
+      pdfjs-dist: 5.4.296
 
-  pdfjs-dist@5.4.449:
+  pdfjs-dist@5.4.296:
     optionalDependencies:
       '@napi-rs/canvas': 0.1.84
 
