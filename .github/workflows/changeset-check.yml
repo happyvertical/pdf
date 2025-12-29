@@ -12,7 +12,7 @@ permissions:
 jobs:
   check:
     name: Check for Changeset
-    runs-on: ubuntu-latest
+    runs-on: arc-happyvertical
 
     steps:
       - name: Checkout
