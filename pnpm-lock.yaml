@@ -15,8 +15,8 @@ importers:
         specifier: ^0.60.4
         version: 0.60.4
       '@happyvertical/utils':
-        specifier: ^0.60.2
-        version: 0.60.2
+        specifier: ^0.66.0
+        version: 0.66.11
       pdf-to-png-converter:
         specifier: ^3.10.0
         version: 3.11.0
@@ -437,6 +437,9 @@ packages:
   '@happyvertical/utils@0.60.2':
     resolution: {integrity: sha512-O545bmkf++TAfCP/MbXV/U0ucx+6TRi4dsiOpOO92xnu6N8kNPBVsZ2Kt+M1XBwhRLuhE0Y0lBBpXFm021+18A==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.60.2/0e25ff142cbf8c3e24c7cfa014b0a1155896fe8f}
 
+  '@happyvertical/utils@0.66.11':
+    resolution: {integrity: sha512-ARSofRmpVs68NpSGGmk6eHXXBmCqQP2LzTyhb/HHoZpO+7iny+WGuvknce2cGK1XAvWnmdjwwwjOX3xXDIEz3w==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.66.11/7f6cbb1352f8bd85d372fea3f46454739f91f001}
+
   '@img/sharp-darwin-arm64@0.33.5':
     resolution: {integrity: sha512-UT4p+iz/2H4twwAoLCqfA9UH5pI6DggwKEGuaPy7nCVQ8ZsiY5PIcrRvD1DzuY3qYL07NtIQcWnBSY/heikIFQ==}
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
@@ -663,6 +666,10 @@ packages:
 
   '@paralleldrive/cuid2@3.0.4':
     resolution: {integrity: sha512-sM6M2PWrByOEpN2QYAdulhEbSZmChwj0e52u4hpwB7u4PznFiNAavtE6m7O8tWUlzX+jT2eKKtc5/ZgX+IHrtg==}
+    hasBin: true
+
+  '@paralleldrive/cuid2@3.0.6':
+    resolution: {integrity: sha512-ujtxTTvr4fwPrzuQT7o6VLKs5BzdWetR9+/zRQ0SyK9hVIwZQllEccxgcHYXN6I3Z429y1yg3F6+uiVxMDPrLQ==}
     hasBin: true
 
   '@rollup/pluginutils@5.3.0':
@@ -2525,6 +2532,13 @@ snapshots:
       pluralize: 8.0.0
       uuid: 13.0.0
 
+  '@happyvertical/utils@0.66.11':
+    dependencies:
+      '@paralleldrive/cuid2': 3.0.6
+      date-fns: 4.1.0
+      pluralize: 8.0.0
+      uuid: 13.0.0
+
   '@img/sharp-darwin-arm64@0.33.5':
     optionalDependencies:
       '@img/sharp-libvips-darwin-arm64': 1.0.4
@@ -2725,6 +2739,12 @@ snapshots:
       fastq: 1.19.1
 
   '@paralleldrive/cuid2@3.0.4':
+    dependencies:
+      '@noble/hashes': 2.0.1
+      bignumber.js: 9.3.1
+      error-causes: 3.0.2
+
+  '@paralleldrive/cuid2@3.0.6':
     dependencies:
       '@noble/hashes': 2.0.1
       bignumber.js: 9.3.1
