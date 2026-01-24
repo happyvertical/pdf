@@ -119,6 +119,21 @@ export async function getPDFReader(
       });
     }
 
+    case 'kreuzberg': {
+      if (!isNode) {
+        throw new Error(
+          'kreuzberg provider is only available in Node.js environments',
+        );
+      }
+
+      // Dynamic import to avoid bundling Node.js code in browser
+      const { KreuzbergProvider } = await import('../node/kreuzberg.js');
+      return new KreuzbergProvider({
+        ocrBackend: readerOptions.ocrProvider as string | undefined,
+        ocrLanguage: options.defaultOCROptions?.language,
+      });
+    }
+
     case 'pdfjs': {
       if (!isBrowser) {
         throw new Error(

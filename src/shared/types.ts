@@ -177,7 +177,7 @@ export interface PDFCapabilities {
  */
 export interface PDFReaderOptions {
   /** Preferred provider type */
-  provider?: 'unpdf' | 'pdfjs' | 'auto';
+  provider?: 'unpdf' | 'pdfjs' | 'kreuzberg' | 'auto';
   /** Whether to enable OCR fallback for image-based PDFs */
   enableOCR?: boolean;
   /** OCR provider to use ('auto', 'tesseract', 'onnx') */

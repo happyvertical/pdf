@@ -52,6 +52,8 @@ export default defineConfig({
         'unpdf',
         'pdf-to-png-converter',
         'pdfjs-dist',
+        '@kreuzberg/node',
+        /^@kreuzberg\//,
 
         // SDK dependencies
         '@happyvertical/utils',
