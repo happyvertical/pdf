@@ -6,6 +6,18 @@ import { loadEnvConfig } from '@happyvertical/utils';
 import type { PDFReader, PDFReaderOptions } from './types';
 
 /**
+ * Check if the kreuzberg provider is available (optional dependency)
+ */
+async function isKreuzbergAvailable(): Promise<boolean> {
+  try {
+    await import('@kreuzberg/node');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Create a PDF reader instance with intelligent provider selection and configuration
  *
  * This is the primary entry point for PDF processing. Automatically selects the best
@@ -22,11 +34,12 @@ import type { PDFReader, PDFReaderOptions } from './types';
  * @example
  * ```typescript
  * // Auto-detect best provider for current environment
+ * // In Node.js: uses kreuzberg if available, else unpdf
  * const reader = await getPDFReader();
  *
  * // Configure with specific options
  * const reader = await getPDFReader({
- *   provider: 'auto',           // 'unpdf', 'pdfjs', or 'auto'
+ *   provider: 'auto',           // 'kreuzberg', 'unpdf', 'pdfjs', or 'auto'
  *   enableOCR: true,            // Enable OCR fallback for image-based PDFs
  *   timeout: 30000,             // 30 second timeout for operations
  *   maxFileSize: 50 * 1024 * 1024, // 50MB file size limit
@@ -93,7 +106,10 @@ export async function getPDFReader(
   let selectedProvider = provider;
   if (provider === 'auto') {
     if (isNode) {
-      selectedProvider = 'unpdf'; // Use unpdf + OCR for Node.js
+      // Prefer kreuzberg for memory efficiency, fall back to unpdf
+      selectedProvider = await isKreuzbergAvailable()
+        ? 'kreuzberg'
+        : 'unpdf';
     } else if (isBrowser) {
       selectedProvider = 'pdfjs'; // Use PDF.js for browser
     } else {
@@ -157,9 +173,12 @@ export async function getPDFReader(
  * Get a list of PDF providers available in the current runtime environment
  *
  * Different providers are available depending on the runtime:
- * - Node.js: ['unpdf'] - Full-featured PDF processing with OCR
+ * - Node.js: ['kreuzberg', 'unpdf'] - kreuzberg (preferred, memory-efficient) and unpdf
  * - Browser: ['pdfjs'] - Text extraction and basic metadata (planned)
  * - Edge/Unknown: [] - No providers available
+ *
+ * Note: kreuzberg is listed but may not be installed (optional dependency).
+ * Use getProviderInfo() for accurate availability checking.
  *
  * @returns Array of provider names available for use with getPDFReader()
  *
@@ -188,7 +207,9 @@ export function getAvailableProviders(): string[] {
     typeof (globalThis as any).document !== 'undefined';
 
   if (isNode) {
-    providers.push('unpdf');
+    // Both kreuzberg and unpdf are available in Node.js
+    // kreuzberg is preferred but may not be installed (optional dependency)
+    providers.push('kreuzberg', 'unpdf');
   }
 
   if (isBrowser) {

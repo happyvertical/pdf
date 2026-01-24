@@ -6,6 +6,7 @@ import {
   extractImagesFromPDF,
   extractTextFromPDF,
   performOCROnImages,
+  getPDFReader,
 } from './index';
 
 describe('Legacy Compatibility Functions', () => {
@@ -24,7 +25,7 @@ describe('Legacy Compatibility Functions', () => {
     expect(typeof text === 'string' || text === null).toBe(true);
   }, 60000); // 60 second timeout for OCR processing
 
-  it('should extract images using legacy function', async () => {
+  it('should extract images using legacy function (unpdf provider)', async () => {
     const pdfPath = join(
       fileURLToPath(new URL('.', import.meta.url)),
       '..',
@@ -32,17 +33,19 @@ describe('Legacy Compatibility Functions', () => {
       'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
     );
 
-    const images = await extractImagesFromPDF(pdfPath);
+    // extractImagesFromPDF requires unpdf provider (modular workflow)
+    const images = await extractImagesFromPDF(pdfPath, { provider: 'unpdf' });
 
     expect(images === null || Array.isArray(images)).toBe(true);
   }, 60000);
 
-  it('should handle OCR using legacy function', async () => {
+  it('should handle OCR using legacy function (unpdf provider)', async () => {
     const mockImages = [
       { data: Buffer.from('fake-image-data'), width: 100, height: 100 },
     ];
 
-    const result = await performOCROnImages(mockImages);
+    // performOCROnImages requires unpdf provider (modular workflow)
+    const result = await performOCROnImages(mockImages, { provider: 'unpdf' });
 
     expect(typeof result).toBe('string');
   }, 30000);

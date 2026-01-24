@@ -8,10 +8,14 @@ describe.skipIf(process.env.CI === 'true')(
   'OCR Integration with Real PDF',
   () => {
     let reader: PDFReader;
+    let unpdfReader: PDFReader;
     let ocrAvailable = false;
 
     beforeAll(async () => {
+      // Default reader (kreuzberg if available)
       reader = await getPDFReader();
+      // unpdf reader for modular operations (extractImages, performOCR)
+      unpdfReader = await getPDFReader({ provider: 'unpdf' });
 
       // Check if OCR is available before running OCR tests
       try {
@@ -38,12 +42,8 @@ describe.skipIf(process.env.CI === 'true')(
         'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
       );
 
-      // Verify this is a scanned PDF that requires OCR
-      const info = await reader.getInfo(pdfPath);
-      expect(info.ocrRequired).toBe(true);
-      expect(info.recommendedStrategy).toBe('ocr');
-
       // Extract text - this MUST work for scanned PDFs
+      // Both kreuzberg and unpdf handle OCR, just differently
       const text = await reader.extractText(pdfPath);
 
       // OCR must return actual text content, not null or empty
@@ -64,7 +64,7 @@ describe.skipIf(process.env.CI === 'true')(
       );
     }, 60000);
 
-    it('should perform OCR on extracted images', async () => {
+    it('should perform OCR on extracted images (unpdf modular workflow)', async () => {
       if (!ocrAvailable) {
         console.log('⏭️ Skipping - OCR not available');
         return;
@@ -77,8 +77,8 @@ describe.skipIf(process.env.CI === 'true')(
         'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
       );
 
-      // Extract embedded images from the PDF
-      const images = await reader.extractImages(pdfPath);
+      // Extract embedded images from the PDF using unpdf (modular workflow)
+      const images = await unpdfReader.extractImages(pdfPath);
 
       // Scanned PDF should have embedded images
       expect(images.length).toBeGreaterThan(0);
@@ -86,7 +86,7 @@ describe.skipIf(process.env.CI === 'true')(
 
       // Perform OCR on the first image
       const firstImage = images.slice(0, 1);
-      const ocrResult = await reader.performOCR(firstImage, {
+      const ocrResult = await unpdfReader.performOCR(firstImage, {
         language: 'eng',
         confidenceThreshold: 50,
       });

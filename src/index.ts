@@ -34,11 +34,13 @@ export async function extractTextFromPDF(
 /**
  * Extract images from all pages of a PDF file (legacy compatibility)
  * @deprecated Use getPDFReader().extractImages() instead
+ * @note Requires unpdf provider - kreuzberg integrates OCR into extractText()
  */
 export async function extractImagesFromPDF(
   pdfPath: string,
+  options?: { provider?: 'unpdf' | 'kreuzberg' | 'auto' },
 ): Promise<any[] | null> {
-  const reader = await getPDFReader();
+  const reader = await getPDFReader({ provider: options?.provider ?? 'unpdf' });
   const images = await reader.extractImages(pdfPath);
   return images.length > 0 ? images : null;
 }
@@ -46,9 +48,13 @@ export async function extractImagesFromPDF(
 /**
  * Perform OCR on image data (legacy compatibility)
  * @deprecated Use getPDFReader().performOCR() instead
+ * @note Requires unpdf provider - kreuzberg integrates OCR into extractText()
  */
-export async function performOCROnImages(images: any[]): Promise<string> {
-  const reader = await getPDFReader();
+export async function performOCROnImages(
+  images: any[],
+  options?: { provider?: 'unpdf' | 'kreuzberg' | 'auto' },
+): Promise<string> {
+  const reader = await getPDFReader({ provider: options?.provider ?? 'unpdf' });
   const result = await reader.performOCR(images);
   return result.text;
 }

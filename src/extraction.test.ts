@@ -6,10 +6,12 @@ import type { PDFReader } from './shared/types';
 
 describe('PDF Content Extraction', () => {
   let reader: PDFReader;
+  let unpdfReader: PDFReader;
   let pdfPath: string;
 
   beforeEach(async () => {
     reader = await getPDFReader();
+    unpdfReader = await getPDFReader({ provider: 'unpdf' });
     pdfPath = join(
       fileURLToPath(new URL('.', import.meta.url)),
       '..',
@@ -25,8 +27,10 @@ describe('PDF Content Extraction', () => {
     expect(metadata.pageCount).toBe(3);
   });
 
-  it('should analyze PDF and detect it requires OCR', async () => {
-    const info = await reader.getInfo(pdfPath);
+  it('should analyze PDF and detect it requires OCR (unpdf)', async () => {
+    // Use unpdf for detailed analysis - kreuzberg handles OCR internally
+    // and doesn't expose these details the same way
+    const info = await unpdfReader.getInfo(pdfPath);
 
     expect(info.pageCount).toBe(3);
     expect(info.hasEmbeddedText).toBe(false);
@@ -34,8 +38,9 @@ describe('PDF Content Extraction', () => {
     expect(info.recommendedStrategy).toBe('ocr');
   });
 
-  it('should extract images from scanned PDF', async () => {
-    const images = await reader.extractImages(pdfPath);
+  it('should extract images from scanned PDF (unpdf)', async () => {
+    // Use unpdf for image extraction - kreuzberg integrates OCR into extractText()
+    const images = await unpdfReader.extractImages(pdfPath);
 
     // Scanned PDF should have embedded images (one per page)
     expect(images.length).toBe(3);

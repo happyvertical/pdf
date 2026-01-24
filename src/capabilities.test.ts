@@ -26,10 +26,10 @@ describe('PDF Reader Capabilities and Dependencies', () => {
     expect(Array.isArray(capabilities.supportedFormats)).toBe(true);
     expect(capabilities.supportedFormats).toContain('pdf');
 
-    // In Node.js with unpdf, these should be true
+    // Core capabilities should be available
     expect(capabilities.canExtractText).toBe(true);
     expect(capabilities.canExtractMetadata).toBe(true);
-    expect(capabilities.canExtractImages).toBe(true);
+    // Note: canExtractImages is false for kreuzberg (OCR is integrated into extractText)
   });
 
   it('should check PDF reader dependencies', async () => {
@@ -40,9 +40,10 @@ describe('PDF Reader Capabilities and Dependencies', () => {
     expect(typeof dependencies.available).toBe('boolean');
     expect(typeof dependencies.details).toBe('object');
 
-    // Should have details about unpdf dependency
-    expect(dependencies.details).toHaveProperty('unpdf');
-    expect(typeof dependencies.details.unpdf).toBe('boolean');
+    // Details should have provider-specific keys (kreuzberg or unpdf)
+    const hasProviderKey =
+      'kreuzberg' in dependencies.details || 'unpdf' in dependencies.details;
+    expect(hasProviderKey).toBe(true);
   });
 
   it('should report consistent capabilities across multiple calls', async () => {
@@ -62,13 +63,8 @@ describe('PDF Reader Capabilities and Dependencies', () => {
 
     expect(deps1.available).toBe(deps2.available);
 
-    // Details might vary due to dynamic checking, but unpdf should be consistent
-    if (
-      deps1.details.unpdf !== undefined &&
-      deps2.details.unpdf !== undefined
-    ) {
-      expect(deps1.details.unpdf).toBe(deps2.details.unpdf);
-    }
+    // Details should be consistent across calls
+    expect(deps1.details).toEqual(deps2.details);
   });
 
   it('should validate capabilities structure', async () => {
