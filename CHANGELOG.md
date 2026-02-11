@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.2
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - handle multi-line commit bodies in auto-changeset (#34) (ci)
+
 ## 0.62.1
 
 ### Patch Changes
