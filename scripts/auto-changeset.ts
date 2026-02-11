@@ -7,8 +7,8 @@
  *
  * Version bump rules for 0.x.x releases:
  * - Breaking changes (feat!, BREAKING CHANGE) → minor bump (0.x.0)
- * - Features, fixes, perf → patch bump (0.0.x)
- * - Other commit types (chore, docs, etc.) → no bump
+ * - Features, fixes, perf, dep updates → patch bump (0.0.x)
+ * - Other commit types (docs, style, etc.) → no bump
  */
 
 import { execSync } from 'node:child_process';
@@ -102,8 +102,11 @@ function determineVersionBump(
 
   const hasFeature = commits.some((c) => c.type === 'feat');
   const hasFix = commits.some((c) => ['fix', 'perf'].includes(c.type));
+  const hasDeps = commits.some(
+    (c) => c.type === 'chore' && c.scope === 'deps',
+  );
 
-  if (hasFeature || hasFix) return 'patch';
+  if (hasFeature || hasFix || hasDeps) return 'patch';
 
   return null; // No releaseable commits
 }
@@ -115,6 +118,9 @@ function generateChangesetContent(
   const features = commits.filter((c) => c.type === 'feat');
   const fixes = commits.filter((c) => c.type === 'fix');
   const breaking = commits.filter((c) => c.breaking);
+  const deps = commits.filter(
+    (c) => c.type === 'chore' && c.scope === 'deps',
+  );
 
   let content = `---\n`;
   content += `"${PACKAGE_NAME}": ${bump}\n`;
@@ -140,6 +146,14 @@ function generateChangesetContent(
     content += `### Bug Fixes\n\n`;
     fixes.forEach((c) => {
       content += `- ${c.message}${c.scope ? ` (${c.scope})` : ''}\n`;
+    });
+    content += `\n`;
+  }
+
+  if (deps.length > 0) {
+    content += `### Dependencies\n\n`;
+    deps.forEach((c) => {
+      content += `- ${c.message}\n`;
     });
   }
 
