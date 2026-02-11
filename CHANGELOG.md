@@ -1,5 +1,20 @@
 # @happyvertical/pdf
 
+## 0.62.1
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - treat dependency updates as patch bumps in auto-changeset
+
+  ### Dependencies
+
+  - update all dependencies (#32)
+  - update @types/node to v24.10.11 (#31)
+  - update @happyvertical/utils to ^0.68.0 (#30)
+  - update @types/node to v24.10.10 (#29)
+
 ## 0.62.0
 
 ### Minor Changes
