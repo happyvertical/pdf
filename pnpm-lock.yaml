@@ -15,8 +15,8 @@ importers:
         specifier: ^0.60.4
         version: 0.60.4
       '@happyvertical/utils':
-        specifier: ^0.68.0
-        version: 0.68.0
+        specifier: ^0.69.0
+        version: 0.69.0
       pdf-to-png-converter:
         specifier: ^3.10.0
         version: 3.11.0
@@ -448,8 +448,8 @@ packages:
   '@happyvertical/utils@0.60.2':
     resolution: {integrity: sha512-O545bmkf++TAfCP/MbXV/U0ucx+6TRi4dsiOpOO92xnu6N8kNPBVsZ2Kt+M1XBwhRLuhE0Y0lBBpXFm021+18A==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.60.2/0e25ff142cbf8c3e24c7cfa014b0a1155896fe8f}
 
-  '@happyvertical/utils@0.68.0':
-    resolution: {integrity: sha512-rDf1p/0EW6pt/ZuKkzDi9C0TtFxEwhTA5yDjJOKDWng2Y1Cnqh/vyDM/j2J2gdpRxF9XY64AbKFMldRtZP6Paw==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.68.0/04eadc801295c46062929c61e939cf127dabefa6}
+  '@happyvertical/utils@0.69.0':
+    resolution: {integrity: sha512-IWPXg686xAx4CkHXnkFimuVPv/64i3ONwSfykFIa1MobRqjOSeMzGndKL1rQnI1/pcQQf2OXC3xGoKD3tnvg9g==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.69.0/e38d11b5ed62e07a931744da5d16aad634f445e6}
     hasBin: true
 
   '@img/sharp-darwin-arm64@0.33.5':
@@ -2617,7 +2617,7 @@ snapshots:
       pluralize: 8.0.0
       uuid: 13.0.0
 
-  '@happyvertical/utils@0.68.0':
+  '@happyvertical/utils@0.69.0':
     dependencies:
       '@paralleldrive/cuid2': 3.3.0
       date-fns: 4.1.0
