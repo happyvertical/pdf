@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.10
+
+### Patch Changes
+
+- ### Dependencies
+
+  - update @types/node to v24.11.0 (#42)
+
 ## 0.62.9
 
 ### Patch Changes
