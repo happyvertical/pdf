@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.13
+
+### Patch Changes
+
+- ### Dependencies
+
+  - update pnpm to v10.31.0 (#45)
+
 ## 0.62.12
 
 ### Patch Changes
