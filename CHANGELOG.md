@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.16
+
+### Patch Changes
+
+- ### Dependencies
+
+  - update all dependencies (#49)
+
 ## 0.62.15
 
 ### Patch Changes
