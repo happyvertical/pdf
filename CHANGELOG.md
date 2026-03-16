@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.17
+
+### Patch Changes
+
+- ### Dependencies
+
+  - update actions/create-github-app-token action to v3 (#50)
+
 ## 0.62.16
 
 ### Patch Changes
