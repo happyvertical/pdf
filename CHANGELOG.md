@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.18
+
+### Patch Changes
+
+- ### Dependencies
+
+  - update pnpm/action-setup action to v5 (#51)
+
 ## 0.62.17
 
 ### Patch Changes
