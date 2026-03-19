@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.19
+
+### Patch Changes
+
+- ### Dependencies
+
+  - update actions/cache digest to 6682284 (#52)
+
 ## 0.62.18
 
 ### Patch Changes
