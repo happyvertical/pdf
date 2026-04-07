@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.22
+
+### Patch Changes
+
+- ### Dependencies
+
+  - update vite to v7.3.2 (#56)
+
 ## 0.62.21
 
 ### Patch Changes
