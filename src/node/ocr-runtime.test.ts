@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   formatPdfOcrRuntimeIssue,
   normalizeTessdataDirectory,
@@ -17,6 +17,8 @@ describe('OCR Runtime Helpers', () => {
         .splice(0)
         .map((directory) => rm(directory, { force: true, recursive: true })),
     );
+    vi.resetModules();
+    process.env.TESSDATA_PREFIX = undefined;
   });
 
   it('should parse tessdata directory from tesseract output', () => {
@@ -36,6 +38,26 @@ describe('OCR Runtime Helpers', () => {
     await expect(normalizeTessdataDirectory(parent)).resolves.toBe(
       tessdataDirectory,
     );
+  });
+
+  it('should validate cached tessdata directories per language', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'pdf-tessdata-'));
+    tempDirectories.push(parent);
+    const tessdataDirectory = join(parent, 'tessdata');
+    await mkdir(tessdataDirectory);
+    await writeFile(join(tessdataDirectory, 'eng.traineddata'), 'stub');
+    process.env.TESSDATA_PREFIX = parent;
+
+    const { ensureTessdataPrefix } = await import('./ocr-runtime');
+
+    await expect(ensureTessdataPrefix('eng')).resolves.toMatchObject({
+      path: tessdataDirectory,
+      source: 'env',
+    });
+
+    await expect(ensureTessdataPrefix('fra')).resolves.toMatchObject({
+      reason: 'Unable to find fra.traineddata',
+    });
   });
 
   it('should format missing tessdata errors with actionable guidance', () => {
@@ -75,6 +97,6 @@ describe('OCR Runtime Helpers', () => {
     );
 
     expect(message).toContain("Kreuzberg OCR backend 'onnx' is not registered");
-    expect(message).toContain("@happyvertical/ocr");
+    expect(message).toContain('@happyvertical/ocr');
   });
 });

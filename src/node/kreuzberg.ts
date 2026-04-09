@@ -349,7 +349,9 @@ export class KreuzbergProvider extends BasePDFReader {
         return {
           available: false,
           error: formatPdfOcrRuntimeIssue(
-            new Error(`OCR backend '${this.options.ocrBackend}' not registered`),
+            new Error(
+              `OCR backend '${this.options.ocrBackend}' not registered`,
+            ),
             {
               backend: this.options.ocrBackend,
             },

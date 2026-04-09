@@ -159,8 +159,8 @@ export class CombinedNodeProvider extends BasePDFReader {
       ...ocrDetails,
     };
 
-    // At least one provider should be available for this to be considered available
-    const available = unpdfDeps.available || ocrAvailable;
+    // This provider always depends on unpdf for PDF parsing and page rendering.
+    const available = unpdfDeps.available;
 
     let error: string | undefined;
     if (!available) {

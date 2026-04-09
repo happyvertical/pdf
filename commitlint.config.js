@@ -13,17 +13,17 @@ export default {
       2,
       'always',
       [
-        'feat',      // New feature
-        'fix',       // Bug fix
-        'docs',      // Documentation changes
-        'style',     // Code style changes (formatting, missing semicolons, etc.)
-        'refactor',  // Code refactoring (neither fixes a bug nor adds a feature)
-        'perf',      // Performance improvements
-        'test',      // Adding or updating tests
-        'build',     // Changes to build system or dependencies
-        'ci',        // Changes to CI configuration files and scripts
-        'chore',     // Other changes that don't modify src or test files
-        'revert',    // Reverts a previous commit
+        'feat', // New feature
+        'fix', // Bug fix
+        'docs', // Documentation changes
+        'style', // Code style changes (formatting, missing semicolons, etc.)
+        'refactor', // Code refactoring (neither fixes a bug nor adds a feature)
+        'perf', // Performance improvements
+        'test', // Adding or updating tests
+        'build', // Changes to build system or dependencies
+        'ci', // Changes to CI configuration files and scripts
+        'chore', // Other changes that don't modify src or test files
+        'revert', // Reverts a previous commit
       ],
     ],
 
@@ -35,17 +35,13 @@ export default {
         'pdf',
         'ocr',
         'unpdf',
-        'deps',      // Dependency updates
-        'release',   // Release-related changes
+        'deps', // Dependency updates
+        'release', // Release-related changes
       ],
     ],
 
     // Subject case - allow sentence-case, lowercase, kebab-case, etc.
-    'subject-case': [
-      2,
-      'never',
-      ['upper-case', 'pascal-case', 'start-case'],
-    ],
+    'subject-case': [2, 'never', ['upper-case', 'pascal-case', 'start-case']],
 
     // Subject full stop - no period at the end
     'subject-full-stop': [2, 'never', '.'],
@@ -73,5 +69,5 @@ export default {
 
     // Body max line length - disable for semantic-release commits
     'body-max-line-length': [0],
-  ],
+  },
 };

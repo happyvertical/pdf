@@ -3,9 +3,9 @@
  */
 
 import { promises as fs } from 'node:fs';
-import { Canvas } from '@napi-rs/canvas';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { Canvas } from '@napi-rs/canvas';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
@@ -38,7 +38,11 @@ export class UnpdfProvider extends BasePDFReader {
   private rgbaToRgbBuffer(data: Uint8ClampedArray): Buffer {
     const rgbData = Buffer.alloc((data.length / 4) * 3);
 
-    for (let sourceIndex = 0, targetIndex = 0; sourceIndex < data.length; sourceIndex += 4) {
+    for (
+      let sourceIndex = 0, targetIndex = 0;
+      sourceIndex < data.length;
+      sourceIndex += 4
+    ) {
       rgbData[targetIndex++] = data[sourceIndex];
       rgbData[targetIndex++] = data[sourceIndex + 1];
       rgbData[targetIndex++] = data[sourceIndex + 2];
@@ -65,7 +69,9 @@ export class UnpdfProvider extends BasePDFReader {
 
   private async ensurePdfjsWorkerConfigured() {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+    const workerPath = require.resolve(
+      'pdfjs-dist/legacy/build/pdf.worker.mjs',
+    );
     const workerSrc = pathToFileURL(workerPath).href;
 
     pdfjs.GlobalWorkerOptions.workerPort = null;
@@ -74,6 +80,18 @@ export class UnpdfProvider extends BasePDFReader {
       pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
       this.configuredPdfjsWorkerSrc = workerSrc;
     }
+  }
+
+  private async verifyRenderDependencies() {
+    await this.ensurePdfjsWorkerConfigured();
+
+    const canvas = new Canvas(1, 1);
+    const context = canvas.getContext('2d');
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, 1, 1);
+    canvas.width = 0;
+    canvas.height = 0;
   }
 
   /**
@@ -344,7 +362,10 @@ export class UnpdfProvider extends BasePDFReader {
       }).promise;
 
       try {
-        const pagesToRender = this.normalizePages(options?.pages, document.numPages);
+        const pagesToRender = this.normalizePages(
+          options?.pages,
+          document.numPages,
+        );
         const images: PDFImage[] = [];
 
         for (const pageNumber of pagesToRender) {
@@ -414,19 +435,21 @@ export class UnpdfProvider extends BasePDFReader {
    */
   async checkDependencies(): Promise<DependencyCheckResult> {
     try {
-      await this.loadUnpdf();
+      await Promise.all([this.loadUnpdf(), this.verifyRenderDependencies()]);
       return {
         available: true,
         details: {
           unpdf: true,
+          pageRendering: true,
         },
       };
     } catch (error) {
       return {
         available: false,
-        error: `unpdf dependency not available: ${(error as Error).message}`,
+        error: `unpdf dependency not available: ${formatPdfOcrRuntimeIssue(error)}`,
         details: {
           unpdf: false,
+          pageRendering: false,
         },
       };
     }

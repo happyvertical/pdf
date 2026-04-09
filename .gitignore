@@ -27,3 +27,6 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# OCR runtime cache
+.kreuzberg/

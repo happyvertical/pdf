@@ -18,7 +18,7 @@ export {
 export * from './shared/types';
 
 // Legacy compatibility exports for backward compatibility with existing code
-import { getPDFReader } from './shared/factory';
+import { getPDFReader, initializeProviders } from './shared/factory';
 
 /**
  * Extract text from a PDF file (legacy compatibility)
@@ -68,11 +68,9 @@ export async function checkOCRDependencies() {
   return reader.checkDependencies();
 }
 
-// Initialize providers on module load
-import('./shared/factory.js').then(({ initializeProviders }) => {
-  initializeProviders().catch(() => {
-    // Ignore initialization errors - providers will fail when used
-  });
+// Initialize providers on module load.
+void initializeProviders().catch(() => {
+  // Ignore initialization errors - providers will fail when used
 });
 
 // Default export for convenience

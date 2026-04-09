@@ -22,7 +22,7 @@ export interface TessdataResolution {
   source?: 'cache' | 'common-path' | 'env' | 'tesseract';
 }
 
-let cachedTessdataDirectory: string | null = null;
+const cachedTessdataDirectories = new Map<string, string>();
 
 async function isReadableFile(path: string): Promise<boolean> {
   try {
@@ -108,14 +108,23 @@ export async function ensureTessdataPrefix(
   language = 'eng',
 ): Promise<TessdataResolution> {
   const checked: string[] = [];
+  const cachedTessdataDirectory = cachedTessdataDirectories.get(language);
 
   if (cachedTessdataDirectory) {
-    process.env.TESSDATA_PREFIX = cachedTessdataDirectory;
-    return {
-      checked,
-      path: cachedTessdataDirectory,
-      source: 'cache',
-    };
+    const normalized = await normalizeTessdataDirectory(
+      cachedTessdataDirectory,
+      language,
+    );
+    if (normalized) {
+      process.env.TESSDATA_PREFIX = normalized;
+      return {
+        checked,
+        path: normalized,
+        source: 'cache',
+      };
+    }
+
+    cachedTessdataDirectories.delete(language);
   }
 
   const envCandidate = process.env.TESSDATA_PREFIX;
@@ -123,7 +132,7 @@ export async function ensureTessdataPrefix(
     checked.push(envCandidate);
     const normalized = await normalizeTessdataDirectory(envCandidate, language);
     if (normalized) {
-      cachedTessdataDirectory = normalized;
+      cachedTessdataDirectories.set(language, normalized);
       process.env.TESSDATA_PREFIX = normalized;
       return {
         checked,
@@ -138,7 +147,7 @@ export async function ensureTessdataPrefix(
     checked,
   );
   if (fromTesseract) {
-    cachedTessdataDirectory = fromTesseract;
+    cachedTessdataDirectories.set(language, fromTesseract);
     process.env.TESSDATA_PREFIX = fromTesseract;
     return {
       checked,
@@ -151,7 +160,7 @@ export async function ensureTessdataPrefix(
     checked.push(directory);
     const normalized = await normalizeTessdataDirectory(directory, language);
     if (normalized) {
-      cachedTessdataDirectory = normalized;
+      cachedTessdataDirectories.set(language, normalized);
       process.env.TESSDATA_PREFIX = normalized;
       return {
         checked,
@@ -211,7 +220,9 @@ export function formatPdfOcrRuntimeIssue(
     return `PDF page rendering failed because pdfjs-dist API ${apiVersion} does not match worker ${workerVersion}. Ensure the installed @happyvertical/pdf and unpdf/pdfjs-dist runtime resolve compatible pdfjs-dist builds. Original error: ${message}`;
   }
 
-  const backendMatch = message.match(/OCR backend ['"]([^'"]+)['"] not registered/i);
+  const backendMatch = message.match(
+    /OCR backend ['"]([^'"]+)['"] not registered/i,
+  );
   if (backendMatch) {
     const backend = context.backend || backendMatch[1];
     return `Kreuzberg OCR backend '${backend}' is not registered in this runtime. Use the built-in 'tesseract' backend, or route OCR through @happyvertical/ocr for providers like 'onnx'. Original error: ${message}`;

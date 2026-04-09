@@ -44,7 +44,7 @@ describe.skipIf(process.env.CI === 'true')(
       if (originalTessdataPrefix) {
         process.env.TESSDATA_PREFIX = originalTessdataPrefix;
       } else {
-        delete process.env.TESSDATA_PREFIX;
+        process.env.TESSDATA_PREFIX = undefined;
       }
     });
 
@@ -57,7 +57,7 @@ describe.skipIf(process.env.CI === 'true')(
       );
 
       // Exercise tessdata auto-detection instead of relying on shell env state.
-      delete process.env.TESSDATA_PREFIX;
+      process.env.TESSDATA_PREFIX = undefined;
 
       // Extract text - this MUST work for scanned PDFs
       // Both kreuzberg and unpdf handle OCR, just differently
@@ -69,15 +69,15 @@ describe.skipIf(process.env.CI === 'true')(
       expect(typeof text).toBe('string');
 
       // Must extract meaningful content (at least 100 chars from a 3-page document)
-      expect(text!.length).toBeGreaterThan(100);
+      expect(text?.length).toBeGreaterThan(100);
 
       // Should contain expected content from the meeting minutes
       // (Bentley is the town name that appears in the document)
-      expect(text!.toLowerCase()).toContain('bentley');
+      expect(text?.toLowerCase()).toContain('bentley');
 
-      console.log(`✅ OCR extracted ${text!.length} characters`);
+      console.log(`✅ OCR extracted ${text?.length} characters`);
       console.log(
-        `Preview: ${text!.substring(0, 200).replace(/\s+/g, ' ').trim()}...`,
+        `Preview: ${text?.substring(0, 200).replace(/\s+/g, ' ').trim()}...`,
       );
     }, 60000);
 
@@ -92,8 +92,8 @@ describe.skipIf(process.env.CI === 'true')(
       const text = await onnxReader.extractText(pdfPath);
 
       expect(text).not.toBeNull();
-      expect(text!.length).toBeGreaterThan(100);
-      expect(text!.toLowerCase()).toContain('bentley');
+      expect(text?.length).toBeGreaterThan(100);
+      expect(text?.toLowerCase()).toContain('bentley');
     }, 60000);
 
     it('should perform OCR on extracted images (unpdf modular workflow)', async () => {

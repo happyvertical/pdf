@@ -7,15 +7,21 @@
  * Usage: npx tsx scripts/benchmark-providers.ts [pdf-path]
  */
 
-import { getPDFReader } from '../src/index.js';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { getPDFReader } from '../src/index.js';
 
 const testPdfs = [
   // Small PDF (~100KB)
-  resolve(import.meta.dirname, '../test/Signed-Meeting-Minutes-July-9-2024-Regular-Meeting-of-Council.pdf'),
+  resolve(
+    import.meta.dirname,
+    '../test/Signed-Meeting-Minutes-July-9-2024-Regular-Meeting-of-Council.pdf',
+  ),
   // Medium PDF (~9MB)
-  resolve(import.meta.dirname, '../test/Agenda-Package-August-27-2024-Regular-Council-Meeting.pdf'),
+  resolve(
+    import.meta.dirname,
+    '../test/Agenda-Package-August-27-2024-Regular-Council-Meeting.pdf',
+  ),
 ];
 
 type Provider = 'unpdf' | 'kreuzberg';
@@ -36,13 +42,13 @@ async function measureMemory(): Promise<number> {
   if (global.gc) {
     global.gc();
   }
-  await new Promise(r => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, 100));
   return process.memoryUsage().heapUsed / 1024 / 1024;
 }
 
 async function benchmarkProvider(
   provider: Provider,
-  pdfPath: string
+  pdfPath: string,
 ): Promise<BenchmarkResult> {
   const fileName = pdfPath.split('/').pop() || pdfPath;
   const fileSize = existsSync(pdfPath)
@@ -110,8 +116,12 @@ async function runBenchmarks(pdfPaths: string[]) {
 
       if (result.success) {
         console.log(`    Duration: ${result.duration}ms`);
-        console.log(`    Memory: +${result.memoryUsedMB}MB (peak: ${result.peakMemoryMB}MB)`);
-        console.log(`    Text extracted: ${result.textLength.toLocaleString()} chars`);
+        console.log(
+          `    Memory: +${result.memoryUsedMB}MB (peak: ${result.peakMemoryMB}MB)`,
+        );
+        console.log(
+          `    Text extracted: ${result.textLength.toLocaleString()} chars`,
+        );
       } else {
         console.log(`    FAILED: ${result.error}`);
       }
@@ -129,7 +139,7 @@ async function runBenchmarks(pdfPaths: string[]) {
   for (const r of results) {
     const status = r.success ? '' : ' [FAILED]';
     console.log(
-      `| ${r.file.slice(0, 30)}... | ${r.provider.padEnd(10)} | ${String(r.duration).padStart(6)}ms | ${String(r.memoryUsedMB).padStart(6)}MB | ${r.textLength.toLocaleString().padStart(11)} |${status}`
+      `| ${r.file.slice(0, 30)}... | ${r.provider.padEnd(10)} | ${String(r.duration).padStart(6)}ms | ${String(r.memoryUsedMB).padStart(6)}MB | ${r.textLength.toLocaleString().padStart(11)} |${status}`,
     );
   }
 
@@ -143,26 +153,41 @@ async function runBenchmarks(pdfPaths: string[]) {
   }
 
   for (const [file, fileResults] of byFile) {
-    const unpdf = fileResults.find(r => r.provider === 'unpdf');
-    const kreuzberg = fileResults.find(r => r.provider === 'kreuzberg');
+    const unpdf = fileResults.find((r) => r.provider === 'unpdf');
+    const kreuzberg = fileResults.find((r) => r.provider === 'kreuzberg');
 
     if (unpdf?.success && kreuzberg?.success) {
-      const speedDiff = ((unpdf.duration - kreuzberg.duration) / unpdf.duration * 100).toFixed(1);
-      const memDiff = ((unpdf.memoryUsedMB - kreuzberg.memoryUsedMB) / (unpdf.memoryUsedMB || 1) * 100).toFixed(1);
+      const speedDiff = (
+        ((unpdf.duration - kreuzberg.duration) / unpdf.duration) *
+        100
+      ).toFixed(1);
+      const memDiff = (
+        ((unpdf.memoryUsedMB - kreuzberg.memoryUsedMB) /
+          (unpdf.memoryUsedMB || 1)) *
+        100
+      ).toFixed(1);
 
       console.log(`\n  ${file}:`);
-      console.log(`    Speed: kreuzberg is ${Number(speedDiff) > 0 ? speedDiff + '% faster' : Math.abs(Number(speedDiff)) + '% slower'}`);
-      console.log(`    Memory: kreuzberg uses ${Number(memDiff) > 0 ? memDiff + '% less' : Math.abs(Number(memDiff)) + '% more'}`);
+      console.log(
+        `    Speed: kreuzberg is ${Number(speedDiff) > 0 ? `${speedDiff}% faster` : `${Math.abs(Number(speedDiff))}% slower`}`,
+      );
+      console.log(
+        `    Memory: kreuzberg uses ${Number(memDiff) > 0 ? `${memDiff}% less` : `${Math.abs(Number(memDiff))}% more`}`,
+      );
     }
   }
 }
 
 // Main
 const customPdf = process.argv[2];
-const pdfsToTest = customPdf ? [resolve(customPdf)] : testPdfs.filter(existsSync);
+const pdfsToTest = customPdf
+  ? [resolve(customPdf)]
+  : testPdfs.filter(existsSync);
 
 if (pdfsToTest.length === 0) {
-  console.error('No test PDFs found. Provide a PDF path or ensure test PDFs exist.');
+  console.error(
+    'No test PDFs found. Provide a PDF path or ensure test PDFs exist.',
+  );
   process.exit(1);
 }
 
