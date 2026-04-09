@@ -50,9 +50,11 @@ export function parseTessdataDirectoryFromTesseractOutput(
     return null;
   }
 
-  const quotedMatch = firstLine.match(/List of available languages in "(.+?)"/);
-  if (quotedMatch?.[1]) {
-    return quotedMatch[1];
+  const tessdataMatch = firstLine.match(
+    /List of available languages in "?(.+?)"? \(\d+\):/,
+  );
+  if (tessdataMatch?.[1]) {
+    return tessdataMatch[1];
   }
 
   if (firstLine.startsWith('/') || /^[A-Za-z]:[\\/]/.test(firstLine)) {

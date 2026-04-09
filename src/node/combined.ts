@@ -159,8 +159,10 @@ export class CombinedNodeProvider extends BasePDFReader {
       ...ocrDetails,
     };
 
-    // This provider always depends on unpdf for PDF parsing and page rendering.
-    const available = unpdfDeps.available;
+    // This provider depends on both core unpdf parsing and page rendering.
+    const available =
+      unpdfDeps.details.unpdf === true &&
+      unpdfDeps.details.pageRendering === true;
 
     let error: string | undefined;
     if (!available) {

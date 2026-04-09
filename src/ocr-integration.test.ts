@@ -44,7 +44,7 @@ describe.skipIf(process.env.CI === 'true')(
       if (originalTessdataPrefix) {
         process.env.TESSDATA_PREFIX = originalTessdataPrefix;
       } else {
-        process.env.TESSDATA_PREFIX = undefined;
+        Reflect.deleteProperty(process.env, 'TESSDATA_PREFIX');
       }
     });
 
@@ -57,7 +57,7 @@ describe.skipIf(process.env.CI === 'true')(
       );
 
       // Exercise tessdata auto-detection instead of relying on shell env state.
-      process.env.TESSDATA_PREFIX = undefined;
+      Reflect.deleteProperty(process.env, 'TESSDATA_PREFIX');
 
       // Extract text - this MUST work for scanned PDFs
       // Both kreuzberg and unpdf handle OCR, just differently

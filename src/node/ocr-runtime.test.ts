@@ -18,11 +18,20 @@ describe('OCR Runtime Helpers', () => {
         .map((directory) => rm(directory, { force: true, recursive: true })),
     );
     vi.resetModules();
-    process.env.TESSDATA_PREFIX = undefined;
+    Reflect.deleteProperty(process.env, 'TESSDATA_PREFIX');
   });
 
   it('should parse tessdata directory from tesseract output', () => {
-    const output = `List of available languages in "/usr/share/tessdata/" (2):\neng\nfra\n`;
+    const output =
+      'List of available languages in "/usr/share/tessdata/" (2):\neng\nfra\n';
+    expect(parseTessdataDirectoryFromTesseractOutput(output)).toBe(
+      '/usr/share/tessdata/',
+    );
+  });
+
+  it('should parse unquoted tessdata directory from tesseract output', () => {
+    const output =
+      'List of available languages in /usr/share/tessdata/ (2):\neng\nfra\n';
     expect(parseTessdataDirectoryFromTesseractOutput(output)).toBe(
       '/usr/share/tessdata/',
     );
@@ -55,8 +64,10 @@ describe('OCR Runtime Helpers', () => {
       source: 'env',
     });
 
-    await expect(ensureTessdataPrefix('fra')).resolves.toMatchObject({
-      reason: 'Unable to find fra.traineddata',
+    await expect(
+      ensureTessdataPrefix('__codex_missing_language__'),
+    ).resolves.toMatchObject({
+      reason: 'Unable to find __codex_missing_language__.traineddata',
     });
   });
 

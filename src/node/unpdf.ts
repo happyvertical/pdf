@@ -97,21 +97,31 @@ export class UnpdfProvider extends BasePDFReader {
   /**
    * Override normalizeSource to handle file reading in Node.js
    */
-  protected async normalizeSource(source: PDFSource): Promise<Buffer> {
+  protected async normalizeSource(source: PDFSource): Promise<Uint8Array> {
     if (typeof source === 'string') {
       try {
         const buffer = await fs.readFile(source);
-        return buffer;
+        return new Uint8Array(
+          buffer.buffer,
+          buffer.byteOffset,
+          buffer.byteLength,
+        );
       } catch (error) {
         throw new Error(`Failed to read PDF file: ${(error as Error).message}`);
       }
     } else if (source instanceof Buffer) {
-      return source;
+      return new Uint8Array(
+        source.buffer,
+        source.byteOffset,
+        source.byteLength,
+      );
+    } else if (source instanceof ArrayBuffer) {
+      return new Uint8Array(source);
     } else if (source instanceof Uint8Array) {
-      return Buffer.from(source);
+      return source;
     } else {
       throw new Error(
-        'Invalid PDF source: must be file path, Buffer, or Uint8Array',
+        'Invalid PDF source: must be file path, Buffer, ArrayBuffer, or Uint8Array',
       );
     }
   }
@@ -143,7 +153,7 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+      const pdf = await unpdf.getDocumentProxy(buffer);
       const totalPages = pdf.numPages;
 
       // Normalize pages to extract
@@ -199,7 +209,7 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+      const pdf = await unpdf.getDocumentProxy(buffer);
       const metadata = await pdf.getMetadata();
 
       return {
@@ -225,7 +235,7 @@ export class UnpdfProvider extends BasePDFReader {
       try {
         const unpdf = await this.loadUnpdf();
         const buffer = await this.normalizeSource(source);
-        const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+        const pdf = await unpdf.getDocumentProxy(buffer);
         return this.createDefaultMetadata(pdf.numPages);
       } catch {
         return this.createDefaultMetadata(0);
@@ -270,7 +280,7 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+      const pdf = await unpdf.getDocumentProxy(buffer);
       const allImages: PDFImage[] = [];
 
       // Extract from all pages
@@ -358,7 +368,7 @@ export class UnpdfProvider extends BasePDFReader {
       }
 
       const document = await pdfjs.getDocument({
-        data: new Uint8Array(buffer),
+        data: buffer,
       }).promise;
 
       try {
@@ -418,11 +428,12 @@ export class UnpdfProvider extends BasePDFReader {
    */
   async checkCapabilities(): Promise<PDFCapabilities> {
     const deps = await this.checkDependencies();
+    const coreUnpdfAvailable = deps.details.unpdf === true;
 
     return {
-      canExtractText: deps.available,
-      canExtractMetadata: deps.available,
-      canExtractImages: deps.available,
+      canExtractText: coreUnpdfAvailable,
+      canExtractMetadata: coreUnpdfAvailable,
+      canExtractImages: coreUnpdfAvailable,
       canPerformOCR: false, // unpdf doesn't do OCR
       supportedFormats: ['pdf'],
       maxFileSize: undefined, // No explicit limit
@@ -434,25 +445,36 @@ export class UnpdfProvider extends BasePDFReader {
    * Check if unpdf dependencies are available
    */
   async checkDependencies(): Promise<DependencyCheckResult> {
+    let unpdfAvailable = false;
+    let pageRenderingAvailable = false;
+    const errors: string[] = [];
+
     try {
-      await Promise.all([this.loadUnpdf(), this.verifyRenderDependencies()]);
-      return {
-        available: true,
-        details: {
-          unpdf: true,
-          pageRendering: true,
-        },
-      };
+      await this.loadUnpdf();
+      unpdfAvailable = true;
     } catch (error) {
-      return {
-        available: false,
-        error: `unpdf dependency not available: ${formatPdfOcrRuntimeIssue(error)}`,
-        details: {
-          unpdf: false,
-          pageRendering: false,
-        },
-      };
+      errors.push(`unpdf import unavailable: ${(error as Error).message}`);
     }
+
+    if (unpdfAvailable) {
+      try {
+        await this.verifyRenderDependencies();
+        pageRenderingAvailable = true;
+      } catch (error) {
+        errors.push(
+          `page rendering unavailable: ${formatPdfOcrRuntimeIssue(error)}`,
+        );
+      }
+    }
+
+    return {
+      available: unpdfAvailable && pageRenderingAvailable,
+      error: errors.length > 0 ? errors.join('; ') : undefined,
+      details: {
+        unpdf: unpdfAvailable,
+        pageRendering: pageRenderingAvailable,
+      },
+    };
   }
 
   /**
@@ -467,7 +489,7 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+      const pdf = await unpdf.getDocumentProxy(buffer);
       const metadata = await pdf.getMetadata();
 
       // Quick analysis of document structure

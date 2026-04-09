@@ -9,9 +9,9 @@ describe('CombinedNodeProvider', () => {
     reader.unpdfProvider = {
       checkDependencies: vi.fn().mockResolvedValue({
         available: false,
-        error: 'unpdf dependency not available: worker mismatch',
+        error: 'page rendering unavailable: worker mismatch',
         details: {
-          unpdf: false,
+          unpdf: true,
           pageRendering: false,
         },
       }),
@@ -23,9 +23,9 @@ describe('CombinedNodeProvider', () => {
 
     await expect(reader.checkDependencies()).resolves.toMatchObject({
       available: false,
-      error: 'unpdf dependency not available: worker mismatch',
+      error: 'page rendering unavailable: worker mismatch',
       details: {
-        unpdf: false,
+        unpdf: true,
         pageRendering: false,
         ocr: true,
         ocrProviders: 1,
@@ -45,9 +45,9 @@ describe('UnpdfProvider', () => {
 
     await expect(reader.checkDependencies()).resolves.toMatchObject({
       available: false,
-      error: 'unpdf dependency not available: worker mismatch',
+      error: 'page rendering unavailable: worker mismatch',
       details: {
-        unpdf: false,
+        unpdf: true,
         pageRendering: false,
       },
     });
