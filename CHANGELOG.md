@@ -1,5 +1,14 @@
 # @happyvertical/pdf
 
+## 0.62.23
+
+### Patch Changes
+
+- 62fe179: Improve Node OCR runtime handling for scanned PDFs by auto-detecting Tesseract
+  `tessdata`, surfacing actionable OCR dependency errors, routing explicit
+  external OCR providers like `onnx` through the `unpdf` pipeline, and rendering
+  OCR pages directly with `pdfjs-dist` to avoid worker-version mismatches.
+
 ## 0.62.22
 
 ### Patch Changes
