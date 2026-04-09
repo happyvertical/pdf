@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkOCRDependencies, getPDFReader } from './index';
 import type { PDFReader } from './shared/types';
 
@@ -8,12 +8,18 @@ describe.skipIf(process.env.CI === 'true')(
   'OCR Integration with Real PDF',
   () => {
     let reader: PDFReader;
+    let onnxReader: PDFReader;
     let unpdfReader: PDFReader;
     let ocrAvailable = false;
+    const originalTessdataPrefix = process.env.TESSDATA_PREFIX;
 
     beforeAll(async () => {
       // Default reader (kreuzberg if available)
       reader = await getPDFReader();
+      onnxReader = await getPDFReader({
+        provider: 'auto',
+        ocrProvider: 'onnx',
+      });
       // unpdf reader for modular operations (extractImages, performOCR)
       unpdfReader = await getPDFReader({ provider: 'unpdf' });
 
@@ -34,6 +40,14 @@ describe.skipIf(process.env.CI === 'true')(
       }
     });
 
+    afterAll(() => {
+      if (originalTessdataPrefix) {
+        process.env.TESSDATA_PREFIX = originalTessdataPrefix;
+      } else {
+        delete process.env.TESSDATA_PREFIX;
+      }
+    });
+
     it('should extract text from scanned PDF using OCR', async () => {
       const pdfPath = join(
         fileURLToPath(new URL('.', import.meta.url)),
@@ -41,6 +55,9 @@ describe.skipIf(process.env.CI === 'true')(
         'test',
         'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
       );
+
+      // Exercise tessdata auto-detection instead of relying on shell env state.
+      delete process.env.TESSDATA_PREFIX;
 
       // Extract text - this MUST work for scanned PDFs
       // Both kreuzberg and unpdf handle OCR, just differently
@@ -62,6 +79,21 @@ describe.skipIf(process.env.CI === 'true')(
       console.log(
         `Preview: ${text!.substring(0, 200).replace(/\s+/g, ' ').trim()}...`,
       );
+    }, 60000);
+
+    it('should extract text from scanned PDF using unpdf plus ONNX OCR', async () => {
+      const pdfPath = join(
+        fileURLToPath(new URL('.', import.meta.url)),
+        '..',
+        'test',
+        'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
+      );
+
+      const text = await onnxReader.extractText(pdfPath);
+
+      expect(text).not.toBeNull();
+      expect(text!.length).toBeGreaterThan(100);
+      expect(text!.toLowerCase()).toContain('bentley');
     }, 60000);
 
     it('should perform OCR on extracted images (unpdf modular workflow)', async () => {

@@ -56,9 +56,10 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
-    "@happyvertical/ocr": "^0.60.4",
-    "@happyvertical/utils": "^0.71.0",
-    "pdf-to-png-converter": "^3.10.0",
+    "@happyvertical/ocr": "^0.60.33",
+    "@happyvertical/utils": "^0.71.20",
+    "@napi-rs/canvas": "0.1.97",
+    "pdfjs-dist": "5.4.296",
     "unpdf": "^1.4.0"
   },
   "optionalDependencies": {

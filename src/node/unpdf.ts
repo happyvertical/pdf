@@ -2,11 +2,10 @@
  * @happyvertical/pdf - unpdf provider for Node.js PDF processing
  */
 
-import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pdfToPng } from 'pdf-to-png-converter';
+import { Canvas } from '@napi-rs/canvas';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
@@ -19,6 +18,9 @@ import type {
   RenderPagesOptions,
 } from '../shared/types';
 import { PDFDependencyError } from '../shared/types';
+import { formatPdfOcrRuntimeIssue } from './ocr-runtime';
+
+const require = createRequire(import.meta.url);
 
 /**
  * PDF reader implementation using unpdf library for Node.js
@@ -31,6 +33,19 @@ import { PDFDependencyError } from '../shared/types';
 export class UnpdfProvider extends BasePDFReader {
   protected name = 'unpdf';
   private unpdf: any = null;
+  private configuredPdfjsWorkerSrc: string | null = null;
+
+  private rgbaToRgbBuffer(data: Uint8ClampedArray): Buffer {
+    const rgbData = Buffer.alloc((data.length / 4) * 3);
+
+    for (let sourceIndex = 0, targetIndex = 0; sourceIndex < data.length; sourceIndex += 4) {
+      rgbData[targetIndex++] = data[sourceIndex];
+      rgbData[targetIndex++] = data[sourceIndex + 1];
+      rgbData[targetIndex++] = data[sourceIndex + 2];
+    }
+
+    return rgbData;
+  }
 
   /**
    * Lazy load unpdf dependencies
@@ -45,6 +60,19 @@ export class UnpdfProvider extends BasePDFReader {
       return this.unpdf;
     } catch (error) {
       throw new PDFDependencyError('unpdf', (error as Error).message);
+    }
+  }
+
+  private async ensurePdfjsWorkerConfigured() {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+    const workerSrc = pathToFileURL(workerPath).href;
+
+    pdfjs.GlobalWorkerOptions.workerPort = null;
+
+    if (this.configuredPdfjsWorkerSrc !== workerSrc) {
+      pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+      this.configuredPdfjsWorkerSrc = workerSrc;
     }
   }
 
@@ -303,69 +331,63 @@ export class UnpdfProvider extends BasePDFReader {
     }
 
     try {
+      await this.ensurePdfjsWorkerConfigured();
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
       const buffer = await this.normalizeSource(source);
 
       if (!this.validatePDFData(buffer)) {
         throw new Error('Invalid PDF data');
       }
 
-      // pdf-to-png-converter needs a file path, so write buffer to temp file
-      const tempPdfPath = join(
-        tmpdir(),
-        `pdf-render-${randomBytes(8).toString('hex')}.pdf`,
-      );
-
-      let pdfPath: string;
-      if (typeof source === 'string') {
-        // Already have a file path
-        pdfPath = source;
-      } else {
-        // Write buffer to temp file
-        await fs.writeFile(tempPdfPath, buffer);
-        pdfPath = tempPdfPath;
-      }
+      const document = await pdfjs.getDocument({
+        data: new Uint8Array(buffer),
+      }).promise;
 
       try {
-        // Determine output folder
-        const outputFolder = options?.outputFolder || '/tmp/pdf-rendered-pages';
+        const pagesToRender = this.normalizePages(options?.pages, document.numPages);
+        const images: PDFImage[] = [];
 
-        // Determine pages to render
-        let pagesToProcess: number[] | undefined;
-        if (options?.pages && options.pages.length > 0) {
-          pagesToProcess = options.pages;
+        for (const pageNumber of pagesToRender) {
+          const page = await document.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: options?.scale || 2.0 });
+          const width = Math.ceil(viewport.width);
+          const height = Math.ceil(viewport.height);
+          const canvas = new Canvas(width, height);
+          const context = canvas.getContext('2d');
+
+          try {
+            await page.render({
+              canvas: canvas as any,
+              canvasContext: context as any,
+              viewport,
+            }).promise;
+
+            const imageData = context.getImageData(0, 0, width, height);
+
+            images.push({
+              data: this.rgbaToRgbBuffer(imageData.data),
+              format: 'rgb',
+              pageNumber,
+              width,
+              height,
+              channels: 3,
+            });
+          } finally {
+            page.cleanup();
+            canvas.width = 0;
+            canvas.height = 0;
+          }
         }
-
-        // Render pages using pdf-to-png-converter
-        const pngPages = await pdfToPng(pdfPath, {
-          outputFolder,
-          viewportScale: options?.scale || 2.0, // Default 2x for OCR quality
-          pagesToProcess,
-          verbosityLevel: 0, // Quiet mode
-        });
-
-        // Convert to PDFImage format
-        const images: PDFImage[] = pngPages.map((page) => ({
-          data: Buffer.from(page.content as Uint8Array),
-          format: 'png',
-          pageNumber: page.pageNumber,
-          width: undefined, // Will be determined by OCR provider
-          height: undefined,
-          channels: undefined,
-        }));
 
         return images;
       } finally {
-        // Clean up temp file if we created one
-        if (typeof source !== 'string') {
-          try {
-            await fs.unlink(tempPdfPath);
-          } catch {
-            // Ignore cleanup errors
-          }
-        }
+        await document.destroy();
       }
     } catch (error) {
-      console.error('unpdf page rendering failed:', error);
+      console.error(
+        'unpdf page rendering failed:',
+        formatPdfOcrRuntimeIssue(error),
+      );
       return [];
     }
   }

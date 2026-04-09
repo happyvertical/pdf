@@ -24,6 +24,25 @@ describe('PDF Factory Tests', () => {
     expect(reader.constructor.name).toBe('CombinedNodeProvider');
   });
 
+  it('should route explicit onnx OCR requests to unpdf provider', async () => {
+    const reader = await getPDFReader({
+      provider: 'auto',
+      ocrProvider: 'onnx',
+    });
+    expect(reader.constructor.name).toBe('CombinedNodeProvider');
+  });
+
+  it('should reject unsupported Kreuzberg OCR backends early', async () => {
+    await expect(
+      getPDFReader({
+        provider: 'kreuzberg',
+        ocrProvider: 'onnx',
+      }),
+    ).rejects.toThrow(
+      "kreuzberg provider does not support OCR provider 'onnx'",
+    );
+  });
+
   it('should reject invalid provider for Node.js environment', async () => {
     await expect(getPDFReader({ provider: 'pdfjs' as any })).rejects.toThrow(
       'pdfjs provider is only available in browser environments',

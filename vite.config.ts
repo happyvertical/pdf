@@ -50,8 +50,9 @@ export default defineConfig({
 
         // External dependencies - don't bundle these
         'unpdf',
-        'pdf-to-png-converter',
         'pdfjs-dist',
+        /^pdfjs-dist\//,
+        '@napi-rs/canvas',
         '@kreuzberg/node',
         /^@kreuzberg\//,
 

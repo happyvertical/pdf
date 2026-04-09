@@ -17,6 +17,30 @@ async function isKreuzbergAvailable(): Promise<boolean> {
   }
 }
 
+function requiresExternalOCRProvider(ocrProvider?: string): boolean {
+  return Boolean(
+    ocrProvider && ocrProvider !== 'auto' && ocrProvider !== 'tesseract',
+  );
+}
+
+async function canUseKreuzberg(options: PDFReaderOptions): Promise<boolean> {
+  if (!(await isKreuzbergAvailable())) {
+    return false;
+  }
+
+  try {
+    const { KreuzbergProvider } = await import('../node/kreuzberg.js');
+    const reader = new KreuzbergProvider({
+      ocrBackend: options.ocrProvider,
+      ocrLanguage: options.defaultOCROptions?.language,
+    });
+    const deps = await reader.checkDependencies();
+    return deps.available;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Create a PDF reader instance with intelligent provider selection and configuration
  *
@@ -81,7 +105,7 @@ export async function getPDFReader(
   options: PDFReaderOptions = {},
 ): Promise<PDFReader> {
   // Load configuration from environment variables, with user options taking precedence
-  const config = loadEnvConfig(options, {
+  const config = loadEnvConfig<PDFReaderOptions>(options, {
     packageName: 'pdf',
     schema: {
       enableOCR: 'boolean',
@@ -92,7 +116,10 @@ export async function getPDFReader(
     },
   });
 
-  const { provider = 'auto', ...readerOptions } = config;
+  const provider = (config.provider ?? 'auto') as NonNullable<
+    PDFReaderOptions['provider']
+  >;
+  const readerOptions: PDFReaderOptions = { ...config, provider };
 
   // Environment detection for automatic provider selection
   const isNode =
@@ -106,10 +133,14 @@ export async function getPDFReader(
   let selectedProvider = provider;
   if (provider === 'auto') {
     if (isNode) {
-      // Prefer kreuzberg for memory efficiency, fall back to unpdf
-      selectedProvider = await isKreuzbergAvailable()
-        ? 'kreuzberg'
-        : 'unpdf';
+      // Route non-Tesseract OCR providers through the unpdf + @happyvertical/ocr path.
+      if (requiresExternalOCRProvider(readerOptions.ocrProvider)) {
+        selectedProvider = 'unpdf';
+      } else {
+        selectedProvider = (await canUseKreuzberg(readerOptions))
+          ? 'kreuzberg'
+          : 'unpdf';
+      }
     } else if (isBrowser) {
       selectedProvider = 'pdfjs'; // Use PDF.js for browser
     } else {
@@ -139,6 +170,12 @@ export async function getPDFReader(
       if (!isNode) {
         throw new Error(
           'kreuzberg provider is only available in Node.js environments',
+        );
+      }
+
+      if (requiresExternalOCRProvider(readerOptions.ocrProvider)) {
+        throw new Error(
+          `kreuzberg provider does not support OCR provider '${readerOptions.ocrProvider}'. Use provider: 'unpdf' instead.`,
         );
       }
 

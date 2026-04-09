@@ -19,6 +19,7 @@ import type {
   PDFSource,
 } from '../shared/types';
 import { PDFDependencyError, PDFUnsupportedError } from '../shared/types';
+import { ensureTessdataPrefix, formatPdfOcrRuntimeIssue } from './ocr-runtime';
 
 /**
  * Configuration options for the Kreuzberg provider
@@ -125,6 +126,14 @@ export class KreuzbergProvider extends BasePDFReader {
     return Object.keys(config).length > 0 ? config : null;
   }
 
+  private async prepareOCRRuntime(options?: ExtractTextOptions) {
+    if (options?.skipOCRFallback || this.options.ocrBackend !== 'tesseract') {
+      return null;
+    }
+
+    return ensureTessdataPrefix(this.options.ocrLanguage);
+  }
+
   /**
    * Extract text content from a PDF using Kreuzberg
    *
@@ -147,7 +156,10 @@ export class KreuzbergProvider extends BasePDFReader {
       return null;
     }
 
+    let tessdata = null;
+
     try {
+      tessdata = await this.prepareOCRRuntime(options);
       const kreuzberg = await this.loadKreuzberg();
       const config = this.buildConfig(options);
 
@@ -172,7 +184,12 @@ export class KreuzbergProvider extends BasePDFReader {
 
       return result.content;
     } catch (error) {
-      console.error('Kreuzberg text extraction failed:', error);
+      const message = formatPdfOcrRuntimeIssue(error, {
+        backend: this.options.ocrBackend,
+        language: this.options.ocrLanguage,
+        tessdata,
+      });
+      console.error('Kreuzberg text extraction failed:', message);
       return null;
     }
   }
@@ -318,12 +335,68 @@ export class KreuzbergProvider extends BasePDFReader {
    */
   async checkDependencies(): Promise<DependencyCheckResult> {
     try {
-      await this.loadKreuzberg();
+      const kreuzberg = await this.loadKreuzberg();
+      const availableBackends =
+        typeof kreuzberg.listOcrBackends === 'function'
+          ? kreuzberg.listOcrBackends()
+          : [];
+
+      if (
+        this.options.ocrBackend &&
+        availableBackends.length > 0 &&
+        !availableBackends.includes(this.options.ocrBackend)
+      ) {
+        return {
+          available: false,
+          error: formatPdfOcrRuntimeIssue(
+            new Error(`OCR backend '${this.options.ocrBackend}' not registered`),
+            {
+              backend: this.options.ocrBackend,
+            },
+          ),
+          details: {
+            kreuzberg: true,
+            ocrBackend: this.options.ocrBackend,
+            ocrBackends: availableBackends,
+          },
+        };
+      }
+
+      const tessdata =
+        this.options.ocrBackend === 'tesseract'
+          ? await ensureTessdataPrefix(this.options.ocrLanguage)
+          : null;
+
+      if (this.options.ocrBackend === 'tesseract' && !tessdata?.path) {
+        return {
+          available: false,
+          error: formatPdfOcrRuntimeIssue(
+            new Error(
+              `Failed to initialize language '${this.options.ocrLanguage}'`,
+            ),
+            {
+              backend: this.options.ocrBackend,
+              language: this.options.ocrLanguage,
+              tessdata,
+            },
+          ),
+          details: {
+            kreuzberg: true,
+            ocrBackend: this.options.ocrBackend,
+            ocrBackends: availableBackends,
+            tessdataChecked: tessdata?.checked || [],
+            tessdataPrefix: process.env.TESSDATA_PREFIX || null,
+          },
+        };
+      }
 
       return {
         available: true,
         details: {
           kreuzberg: true,
+          ocrBackend: this.options.ocrBackend,
+          ocrBackends: availableBackends,
+          tessdataPrefix: process.env.TESSDATA_PREFIX || null,
         },
       };
     } catch (error) {
