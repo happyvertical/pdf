@@ -2,9 +2,21 @@
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "files": {
     "include": [
-      "src/**/*.{js,ts,tsx,jsx}",
-      "test/**/*.{js,ts,tsx,jsx}",
-      "*.{js,ts,tsx,jsx}"
+      "src/**/*.js",
+      "src/**/*.jsx",
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "test/**/*.js",
+      "test/**/*.jsx",
+      "test/**/*.ts",
+      "test/**/*.tsx",
+      "scripts/**/*.js",
+      "scripts/**/*.ts",
+      "*.js",
+      "*.jsx",
+      "*.ts",
+      "*.tsx",
+      "*.json"
     ],
     "ignoreUnknown": true
   },

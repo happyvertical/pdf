@@ -2,11 +2,10 @@
  * @happyvertical/pdf - unpdf provider for Node.js PDF processing
  */
 
-import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pdfToPng } from 'pdf-to-png-converter';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { Canvas } from '@napi-rs/canvas';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
@@ -19,6 +18,9 @@ import type {
   RenderPagesOptions,
 } from '../shared/types';
 import { PDFDependencyError } from '../shared/types';
+import { formatPdfOcrRuntimeIssue } from './ocr-runtime';
+
+const require = createRequire(import.meta.url);
 
 /**
  * PDF reader implementation using unpdf library for Node.js
@@ -31,6 +33,23 @@ import { PDFDependencyError } from '../shared/types';
 export class UnpdfProvider extends BasePDFReader {
   protected name = 'unpdf';
   private unpdf: any = null;
+  private configuredPdfjsWorkerSrc: string | null = null;
+
+  private rgbaToRgbBuffer(data: Uint8ClampedArray): Buffer {
+    const rgbData = Buffer.alloc((data.length / 4) * 3);
+
+    for (
+      let sourceIndex = 0, targetIndex = 0;
+      sourceIndex < data.length;
+      sourceIndex += 4
+    ) {
+      rgbData[targetIndex++] = data[sourceIndex];
+      rgbData[targetIndex++] = data[sourceIndex + 1];
+      rgbData[targetIndex++] = data[sourceIndex + 2];
+    }
+
+    return rgbData;
+  }
 
   /**
    * Lazy load unpdf dependencies
@@ -48,24 +67,61 @@ export class UnpdfProvider extends BasePDFReader {
     }
   }
 
+  private async ensurePdfjsWorkerConfigured() {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const workerPath = require.resolve(
+      'pdfjs-dist/legacy/build/pdf.worker.mjs',
+    );
+    const workerSrc = pathToFileURL(workerPath).href;
+
+    pdfjs.GlobalWorkerOptions.workerPort = null;
+
+    if (this.configuredPdfjsWorkerSrc !== workerSrc) {
+      pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+      this.configuredPdfjsWorkerSrc = workerSrc;
+    }
+  }
+
+  private async verifyRenderDependencies() {
+    await this.ensurePdfjsWorkerConfigured();
+
+    const canvas = new Canvas(1, 1);
+    const context = canvas.getContext('2d');
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, 1, 1);
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
   /**
    * Override normalizeSource to handle file reading in Node.js
    */
-  protected async normalizeSource(source: PDFSource): Promise<Buffer> {
+  protected async normalizeSource(source: PDFSource): Promise<Uint8Array> {
     if (typeof source === 'string') {
       try {
         const buffer = await fs.readFile(source);
-        return buffer;
+        return new Uint8Array(
+          buffer.buffer,
+          buffer.byteOffset,
+          buffer.byteLength,
+        );
       } catch (error) {
         throw new Error(`Failed to read PDF file: ${(error as Error).message}`);
       }
     } else if (source instanceof Buffer) {
-      return source;
+      return new Uint8Array(
+        source.buffer,
+        source.byteOffset,
+        source.byteLength,
+      );
+    } else if (source instanceof ArrayBuffer) {
+      return new Uint8Array(source);
     } else if (source instanceof Uint8Array) {
-      return Buffer.from(source);
+      return source;
     } else {
       throw new Error(
-        'Invalid PDF source: must be file path, Buffer, or Uint8Array',
+        'Invalid PDF source: must be file path, Buffer, ArrayBuffer, or Uint8Array',
       );
     }
   }
@@ -97,7 +153,7 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+      const pdf = await unpdf.getDocumentProxy(buffer);
       const totalPages = pdf.numPages;
 
       // Normalize pages to extract
@@ -153,7 +209,7 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+      const pdf = await unpdf.getDocumentProxy(buffer);
       const metadata = await pdf.getMetadata();
 
       return {
@@ -179,7 +235,7 @@ export class UnpdfProvider extends BasePDFReader {
       try {
         const unpdf = await this.loadUnpdf();
         const buffer = await this.normalizeSource(source);
-        const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+        const pdf = await unpdf.getDocumentProxy(buffer);
         return this.createDefaultMetadata(pdf.numPages);
       } catch {
         return this.createDefaultMetadata(0);
@@ -224,7 +280,7 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+      const pdf = await unpdf.getDocumentProxy(buffer);
       const allImages: PDFImage[] = [];
 
       // Extract from all pages
@@ -303,69 +359,66 @@ export class UnpdfProvider extends BasePDFReader {
     }
 
     try {
+      await this.ensurePdfjsWorkerConfigured();
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
       const buffer = await this.normalizeSource(source);
 
       if (!this.validatePDFData(buffer)) {
         throw new Error('Invalid PDF data');
       }
 
-      // pdf-to-png-converter needs a file path, so write buffer to temp file
-      const tempPdfPath = join(
-        tmpdir(),
-        `pdf-render-${randomBytes(8).toString('hex')}.pdf`,
-      );
-
-      let pdfPath: string;
-      if (typeof source === 'string') {
-        // Already have a file path
-        pdfPath = source;
-      } else {
-        // Write buffer to temp file
-        await fs.writeFile(tempPdfPath, buffer);
-        pdfPath = tempPdfPath;
-      }
+      const document = await pdfjs.getDocument({
+        data: buffer,
+      }).promise;
 
       try {
-        // Determine output folder
-        const outputFolder = options?.outputFolder || '/tmp/pdf-rendered-pages';
+        const pagesToRender = this.normalizePages(
+          options?.pages,
+          document.numPages,
+        );
+        const images: PDFImage[] = [];
 
-        // Determine pages to render
-        let pagesToProcess: number[] | undefined;
-        if (options?.pages && options.pages.length > 0) {
-          pagesToProcess = options.pages;
+        for (const pageNumber of pagesToRender) {
+          const page = await document.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: options?.scale || 2.0 });
+          const width = Math.ceil(viewport.width);
+          const height = Math.ceil(viewport.height);
+          const canvas = new Canvas(width, height);
+          const context = canvas.getContext('2d');
+
+          try {
+            await page.render({
+              canvas: canvas as any,
+              canvasContext: context as any,
+              viewport,
+            }).promise;
+
+            const imageData = context.getImageData(0, 0, width, height);
+
+            images.push({
+              data: this.rgbaToRgbBuffer(imageData.data),
+              format: 'rgb',
+              pageNumber,
+              width,
+              height,
+              channels: 3,
+            });
+          } finally {
+            page.cleanup();
+            canvas.width = 0;
+            canvas.height = 0;
+          }
         }
-
-        // Render pages using pdf-to-png-converter
-        const pngPages = await pdfToPng(pdfPath, {
-          outputFolder,
-          viewportScale: options?.scale || 2.0, // Default 2x for OCR quality
-          pagesToProcess,
-          verbosityLevel: 0, // Quiet mode
-        });
-
-        // Convert to PDFImage format
-        const images: PDFImage[] = pngPages.map((page) => ({
-          data: Buffer.from(page.content as Uint8Array),
-          format: 'png',
-          pageNumber: page.pageNumber,
-          width: undefined, // Will be determined by OCR provider
-          height: undefined,
-          channels: undefined,
-        }));
 
         return images;
       } finally {
-        // Clean up temp file if we created one
-        if (typeof source !== 'string') {
-          try {
-            await fs.unlink(tempPdfPath);
-          } catch {
-            // Ignore cleanup errors
-          }
-        }
+        await document.destroy();
       }
     } catch (error) {
-      console.error('unpdf page rendering failed:', error);
+      console.error(
+        'unpdf page rendering failed:',
+        formatPdfOcrRuntimeIssue(error),
+      );
       return [];
     }
   }
@@ -375,11 +428,12 @@ export class UnpdfProvider extends BasePDFReader {
    */
   async checkCapabilities(): Promise<PDFCapabilities> {
     const deps = await this.checkDependencies();
+    const coreUnpdfAvailable = deps.details.unpdf === true;
 
     return {
-      canExtractText: deps.available,
-      canExtractMetadata: deps.available,
-      canExtractImages: deps.available,
+      canExtractText: coreUnpdfAvailable,
+      canExtractMetadata: coreUnpdfAvailable,
+      canExtractImages: coreUnpdfAvailable,
       canPerformOCR: false, // unpdf doesn't do OCR
       supportedFormats: ['pdf'],
       maxFileSize: undefined, // No explicit limit
@@ -391,23 +445,36 @@ export class UnpdfProvider extends BasePDFReader {
    * Check if unpdf dependencies are available
    */
   async checkDependencies(): Promise<DependencyCheckResult> {
+    let unpdfAvailable = false;
+    let pageRenderingAvailable = false;
+    const errors: string[] = [];
+
     try {
       await this.loadUnpdf();
-      return {
-        available: true,
-        details: {
-          unpdf: true,
-        },
-      };
+      unpdfAvailable = true;
     } catch (error) {
-      return {
-        available: false,
-        error: `unpdf dependency not available: ${(error as Error).message}`,
-        details: {
-          unpdf: false,
-        },
-      };
+      errors.push(`unpdf import unavailable: ${(error as Error).message}`);
     }
+
+    if (unpdfAvailable) {
+      try {
+        await this.verifyRenderDependencies();
+        pageRenderingAvailable = true;
+      } catch (error) {
+        errors.push(
+          `page rendering unavailable: ${formatPdfOcrRuntimeIssue(error)}`,
+        );
+      }
+    }
+
+    return {
+      available: unpdfAvailable && pageRenderingAvailable,
+      error: errors.length > 0 ? errors.join('; ') : undefined,
+      details: {
+        unpdf: unpdfAvailable,
+        pageRendering: pageRenderingAvailable,
+      },
+    };
   }
 
   /**
@@ -422,7 +489,7 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(new Uint8Array(buffer));
+      const pdf = await unpdf.getDocumentProxy(buffer);
       const metadata = await pdf.getMetadata();
 
       // Quick analysis of document structure

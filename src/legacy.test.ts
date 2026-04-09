@@ -5,8 +5,8 @@ import {
   checkOCRDependencies,
   extractImagesFromPDF,
   extractTextFromPDF,
-  performOCROnImages,
   getPDFReader,
+  performOCROnImages,
 } from './index';
 
 describe('Legacy Compatibility Functions', () => {

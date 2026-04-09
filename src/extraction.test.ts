@@ -61,9 +61,9 @@ describe('PDF Content Extraction', () => {
     expect(typeof text).toBe('string');
 
     // Must extract meaningful content from 3-page document
-    expect(text!.length).toBeGreaterThan(100);
+    expect(text?.length).toBeGreaterThan(100);
 
     // Should contain "Bentley" (the town name in the document)
-    expect(text!.toLowerCase()).toContain('bentley');
+    expect(text?.toLowerCase()).toContain('bentley');
   }, 60000);
 });
