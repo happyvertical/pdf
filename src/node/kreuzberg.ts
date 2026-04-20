@@ -6,6 +6,7 @@
  */
 
 import { promises as fs } from 'node:fs';
+import type { ExtractionConfig, ExtractionResult } from '@kreuzberg/node';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
@@ -21,6 +22,24 @@ import type {
 import { PDFDependencyError, PDFUnsupportedError } from '../shared/types';
 import { ensureTessdataPrefix, formatPdfOcrRuntimeIssue } from './ocr-runtime';
 
+type KreuzbergModule = typeof import('@kreuzberg/node');
+type KreuzbergPdfMetadata = {
+  pageCount?: number;
+  page_count?: number;
+  title?: string;
+  author?: string;
+  subject?: string;
+  keywords?: string;
+  creationDate?: string;
+  modificationDate?: string;
+  pdfVersion?: string;
+  version?: string;
+  creator?: string;
+  producer?: string;
+  encrypted?: boolean;
+  isEncrypted?: boolean;
+};
+
 /**
  * Configuration options for the Kreuzberg provider
  */
@@ -31,6 +50,8 @@ export interface KreuzbergProviderOptions {
   ocrLanguage?: string;
   /** Enable table detection during OCR */
   enableTableDetection?: boolean;
+  /** Optional configured max file size ceiling */
+  maxFileSize?: number;
 }
 
 /**
@@ -50,7 +71,7 @@ export interface KreuzbergProviderOptions {
  */
 export class KreuzbergProvider extends BasePDFReader {
   protected name = 'kreuzberg';
-  private kreuzberg: any = null;
+  private kreuzberg: KreuzbergModule | null = null;
   private options: KreuzbergProviderOptions;
 
   constructor(options: KreuzbergProviderOptions = {}) {
@@ -59,6 +80,7 @@ export class KreuzbergProvider extends BasePDFReader {
       ocrBackend: options.ocrBackend || 'tesseract',
       ocrLanguage: options.ocrLanguage || 'eng',
       enableTableDetection: options.enableTableDetection ?? true,
+      maxFileSize: options.maxFileSize,
     };
   }
 
@@ -107,17 +129,18 @@ export class KreuzbergProvider extends BasePDFReader {
    * Build Kreuzberg extraction config from options
    */
   private buildConfig(options?: ExtractTextOptions) {
-    const config: any = {};
+    const config: ExtractionConfig = {};
 
     // Configure OCR if not explicitly skipped
     if (!options?.skipOCRFallback) {
-      config.ocr = {
-        backend: this.options.ocrBackend,
+      const ocrConfig: NonNullable<ExtractionConfig['ocr']> = {
+        backend: this.options.ocrBackend || 'tesseract',
         language: this.options.ocrLanguage,
       };
+      config.ocr = ocrConfig;
 
       if (this.options.enableTableDetection) {
-        config.ocr.tesseractConfig = {
+        ocrConfig.tesseractConfig = {
           enableTableDetection: true,
         };
       }
@@ -157,20 +180,37 @@ export class KreuzbergProvider extends BasePDFReader {
     }
 
     let tessdata = null;
+    let normalizedBuffer: Buffer | null = null;
 
     try {
+      let sourceSize: number;
+      if (typeof source === 'string') {
+        sourceSize = (await fs.stat(source)).size;
+      } else {
+        normalizedBuffer = await this.normalizeSource(source);
+        sourceSize = normalizedBuffer.byteLength;
+      }
+
+      if (this.options.maxFileSize && sourceSize > this.options.maxFileSize) {
+        const actualMB = (sourceSize / 1024 / 1024).toFixed(1);
+        const limitMB = (this.options.maxFileSize / 1024 / 1024).toFixed(1);
+        throw new Error(
+          `PDF exceeds configured maxFileSize (${actualMB}MB > ${limitMB}MB)`,
+        );
+      }
+
       tessdata = await this.prepareOCRRuntime(options);
       const kreuzberg = await this.loadKreuzberg();
       const config = this.buildConfig(options);
 
-      let result;
+      let result: ExtractionResult | null = null;
 
       if (typeof source === 'string') {
         // File path - use extractFile for best performance
         result = await kreuzberg.extractFile(source, null, config);
       } else {
         // Buffer/Uint8Array - use extractBytes
-        const buffer = await this.normalizeSource(source);
+        const buffer = normalizedBuffer ?? (await this.normalizeSource(source));
         result = await kreuzberg.extractBytes(
           buffer,
           'application/pdf',
@@ -184,6 +224,13 @@ export class KreuzbergProvider extends BasePDFReader {
 
       return result.content;
     } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes('configured maxFileSize')
+      ) {
+        throw error;
+      }
+
       const message = formatPdfOcrRuntimeIssue(error, {
         backend: this.options.ocrBackend,
         language: this.options.ocrLanguage,
@@ -201,7 +248,7 @@ export class KreuzbergProvider extends BasePDFReader {
     try {
       const kreuzberg = await this.loadKreuzberg();
 
-      let result;
+      let result: ExtractionResult | null = null;
 
       if (typeof source === 'string') {
         result = await kreuzberg.extractFile(source, null, null);
@@ -211,7 +258,7 @@ export class KreuzbergProvider extends BasePDFReader {
       }
 
       // Kreuzberg returns metadata in the result object
-      const metadata = result?.metadata || {};
+      const metadata = (result?.metadata || {}) as KreuzbergPdfMetadata;
 
       return {
         pageCount: metadata.pageCount || metadata.page_count || 0,
@@ -228,7 +275,7 @@ export class KreuzbergProvider extends BasePDFReader {
         version: metadata.pdfVersion || metadata.version || undefined,
         creator: metadata.creator || undefined,
         producer: metadata.producer || undefined,
-        encrypted: metadata.encrypted || false,
+        encrypted: metadata.encrypted ?? metadata.isEncrypted ?? false,
       };
     } catch (error) {
       console.error('Kreuzberg metadata extraction failed:', error);
@@ -313,7 +360,7 @@ export class KreuzbergProvider extends BasePDFReader {
         'tiff',
         'webp',
       ],
-      maxFileSize: undefined, // Kreuzberg handles streaming for large files
+      maxFileSize: this.options.maxFileSize,
       ocrLanguages: [
         'eng',
         'deu',

@@ -5,6 +5,8 @@
 import { loadEnvConfig } from '@happyvertical/utils';
 import type { PDFReader, PDFReaderOptions } from './types';
 
+type RuntimeProvider = NonNullable<PDFReaderOptions['provider']>;
+
 /**
  * Check if the kreuzberg provider is available (optional dependency)
  */
@@ -20,6 +22,31 @@ async function isKreuzbergAvailable(): Promise<boolean> {
 function requiresExternalOCRProvider(ocrProvider?: string): boolean {
   return Boolean(
     ocrProvider && ocrProvider !== 'auto' && ocrProvider !== 'tesseract',
+  );
+}
+
+function isBrowserRuntime(): boolean {
+  if (typeof globalThis === 'undefined') {
+    return false;
+  }
+
+  const browserGlobal = globalThis as typeof globalThis & {
+    window?: unknown;
+    document?: unknown;
+  };
+
+  return (
+    typeof browserGlobal.window !== 'undefined' &&
+    typeof browserGlobal.document !== 'undefined'
+  );
+}
+
+function isRuntimeProvider(value: string): value is RuntimeProvider {
+  return (
+    value === 'auto' ||
+    value === 'unpdf' ||
+    value === 'pdfjs' ||
+    value === 'kreuzberg'
   );
 }
 
@@ -116,18 +143,15 @@ export async function getPDFReader(
     },
   });
 
-  const provider = (config.provider ?? 'auto') as NonNullable<
-    PDFReaderOptions['provider']
-  >;
+  const provider = isRuntimeProvider(config.provider ?? 'auto')
+    ? (config.provider ?? 'auto')
+    : 'auto';
   const readerOptions: PDFReaderOptions = { ...config, provider };
 
   // Environment detection for automatic provider selection
   const isNode =
     typeof process !== 'undefined' && process?.versions?.node !== undefined;
-  const isBrowser =
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as any).window !== 'undefined' &&
-    typeof (globalThis as any).document !== 'undefined';
+  const isBrowser = isBrowserRuntime();
 
   // Select provider based on environment and preference
   let selectedProvider = provider;
@@ -163,6 +187,7 @@ export async function getPDFReader(
       const { CombinedNodeProvider } = await import('../node/combined.js');
       return new CombinedNodeProvider({
         ocrProvider: readerOptions.ocrProvider as string | undefined,
+        maxFileSize: readerOptions.maxFileSize,
       });
     }
 
@@ -184,6 +209,7 @@ export async function getPDFReader(
       return new KreuzbergProvider({
         ocrBackend: readerOptions.ocrProvider as string | undefined,
         ocrLanguage: options.defaultOCROptions?.language,
+        maxFileSize: readerOptions.maxFileSize,
       });
     }
 
@@ -238,10 +264,7 @@ export function getAvailableProviders(): string[] {
 
   const isNode =
     typeof process !== 'undefined' && process?.versions?.node !== undefined;
-  const isBrowser =
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as any).window !== 'undefined' &&
-    typeof (globalThis as any).document !== 'undefined';
+  const isBrowser = isBrowserRuntime();
 
   if (isNode) {
     // Both kreuzberg and unpdf are available in Node.js
@@ -324,7 +347,11 @@ export function isProviderAvailable(provider: string): boolean {
  */
 export async function getProviderInfo(provider: string) {
   try {
-    const reader = await getPDFReader({ provider: provider as any });
+    if (!isRuntimeProvider(provider)) {
+      throw new Error(`Unknown PDF provider: ${provider}`);
+    }
+
+    const reader = await getPDFReader({ provider });
     const [capabilities, dependencies] = await Promise.all([
       reader.checkCapabilities(),
       reader.checkDependencies(),

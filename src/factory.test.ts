@@ -1,10 +1,11 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getAvailableProviders,
   getPDFReader,
   getProviderInfo,
   isProviderAvailable,
 } from './index';
+import { KreuzbergProvider } from './node/kreuzberg';
 
 describe('PDF Factory Tests', () => {
   it('should create a PDF reader with auto provider selection', async () => {
@@ -89,6 +90,45 @@ describe('PDF Factory Tests', () => {
       maxFileSize: 50 * 1024 * 1024, // 50MB
     });
     expect(reader).toBeDefined();
+  });
+
+  it('should propagate configured maxFileSize to reader capabilities', async () => {
+    const reader = await getPDFReader({
+      provider: 'unpdf',
+      maxFileSize: 64 * 1024 * 1024,
+    });
+
+    await expect(reader.checkCapabilities()).resolves.toMatchObject({
+      maxFileSize: 64 * 1024 * 1024,
+    });
+  });
+
+  it('should throw configured maxFileSize errors from Kreuzberg extraction', async () => {
+    const reader = new KreuzbergProvider({
+      maxFileSize: 4,
+    });
+
+    await expect(reader.extractText(Buffer.from('12345678'))).rejects.toThrow(
+      'PDF exceeds configured maxFileSize',
+    );
+  });
+
+  it('should normalize in-memory sources only once during Kreuzberg extraction', async () => {
+    const reader = new KreuzbergProvider({
+      ocrBackend: 'mock',
+    }) as any;
+
+    const normalized = Buffer.from('pdf-data');
+
+    reader.normalizeSource = vi.fn().mockResolvedValue(normalized);
+    reader.loadKreuzberg = vi.fn().mockResolvedValue({
+      extractBytes: vi.fn().mockResolvedValue({ content: 'ok' }),
+    });
+
+    await expect(
+      reader.extractText(new Uint8Array([1, 2, 3, 4])),
+    ).resolves.toBe('ok');
+    expect(reader.normalizeSource).toHaveBeenCalledTimes(1);
   });
 
   describe('Environment Variable Configuration', () => {
