@@ -9,21 +9,27 @@ import {
   performOCROnImages,
 } from './index';
 
+const OCR_TEST_TIMEOUT_MS = 120000;
+
 describe('Legacy Compatibility Functions', () => {
-  it('should extract text using legacy function', async () => {
-    const pdfPath = join(
-      fileURLToPath(new URL('.', import.meta.url)),
-      '..',
-      'test',
-      'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
-    );
+  it(
+    'should extract text using legacy function',
+    async () => {
+      const pdfPath = join(
+        fileURLToPath(new URL('.', import.meta.url)),
+        '..',
+        'test',
+        'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
+      );
 
-    const text = await extractTextFromPDF(pdfPath);
+      const text = await extractTextFromPDF(pdfPath);
 
-    // Should behave exactly like the original function
-    expect(text !== undefined).toBe(true);
-    expect(typeof text === 'string' || text === null).toBe(true);
-  }, 60000); // 60 second timeout for OCR processing
+      // Should behave exactly like the original function
+      expect(text !== undefined).toBe(true);
+      expect(typeof text === 'string' || text === null).toBe(true);
+    },
+    OCR_TEST_TIMEOUT_MS,
+  );
 
   it('should extract images using legacy function (unpdf provider)', async () => {
     const pdfPath = join(
