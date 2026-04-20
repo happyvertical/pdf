@@ -13,7 +13,7 @@ import type { PDFReader, PDFReaderOptions } from '../shared/types';
 export async function getPDFReader(
   options: PDFReaderOptions = {},
 ): Promise<PDFReader> {
-  const { provider = 'auto', ...readerOptions } = options;
+  const { provider = 'auto' } = options;
 
   // In browser, we only support PDF.js-based providers
   let selectedProvider = provider;
@@ -62,7 +62,13 @@ export function isProviderAvailable(provider: string): boolean {
  */
 export async function getProviderInfo(provider: string) {
   try {
-    const reader = await getPDFReader({ provider: provider as any });
+    if (provider !== 'auto' && provider !== 'pdfjs') {
+      throw new Error(
+        `PDF provider '${provider}' is not available in browser environments. Available providers: pdfjs`,
+      );
+    }
+
+    const reader = await getPDFReader({ provider });
     const [capabilities, dependencies] = await Promise.all([
       reader.checkCapabilities(),
       reader.checkDependencies(),

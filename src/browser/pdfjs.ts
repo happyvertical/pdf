@@ -2,6 +2,7 @@
  * @happyvertical/pdf - PDF.js provider for browser PDF processing
  */
 
+import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
@@ -13,6 +14,34 @@ import type {
 } from '../shared/types';
 import { PDFDependencyError, PDFUnsupportedError } from '../shared/types';
 
+type PDFJSModule = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
+type BrowserPDFJSGlobal = typeof globalThis & {
+  window?: {
+    pdfjsLib?: PDFJSModule;
+  };
+};
+type PDFMetadataInfo = Record<string, unknown>;
+
+function readTextItem(item: TextItem | { type: string; id: string }): string {
+  return 'str' in item ? item.str : '';
+}
+
+function getMetadataInfoValue(
+  info: object | null | undefined,
+  key: string,
+): string | undefined {
+  const value = (info as PDFMetadataInfo | null | undefined)?.[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function getMetadataInfoDate(
+  info: object | null | undefined,
+  key: string,
+): Date | undefined {
+  const value = getMetadataInfoValue(info, key);
+  return value ? new Date(value) : undefined;
+}
+
 /**
  * PDF reader implementation using PDF.js for browser environments
  *
@@ -23,7 +52,7 @@ import { PDFDependencyError, PDFUnsupportedError } from '../shared/types';
  */
 export class PDFJSProvider extends BasePDFReader {
   protected name = 'pdfjs';
-  private pdfjs: any = null;
+  private pdfjs: PDFJSModule | null = null;
 
   // The browser base class already provides normalizeSource, so we don't need to override it
 
@@ -36,14 +65,12 @@ export class PDFJSProvider extends BasePDFReader {
     }
 
     try {
+      const browserGlobal = globalThis as BrowserPDFJSGlobal;
+
       // Try to load PDF.js from CDN or local installation
       // This is a placeholder - actual implementation would depend on how PDF.js is loaded
-      if (
-        typeof globalThis !== 'undefined' &&
-        (globalThis as any).window &&
-        (globalThis as any).window.pdfjsLib
-      ) {
-        this.pdfjs = (globalThis as any).window.pdfjsLib;
+      if (browserGlobal.window?.pdfjsLib) {
+        this.pdfjs = browserGlobal.window.pdfjsLib;
       } else {
         throw new Error(
           'PDF.js library not found. Please include PDF.js in your project.',
@@ -91,10 +118,7 @@ export class PDFJSProvider extends BasePDFReader {
           const textContent = await page.getTextContent();
 
           // Combine text items into a single string
-          const pageText = textContent.items
-            .map((item: any) => item.str || '')
-            .join(' ')
-            .trim();
+          const pageText = textContent.items.map(readTextItem).join(' ').trim();
 
           pageTexts.push(pageText);
         } catch (pageError) {
@@ -132,20 +156,16 @@ export class PDFJSProvider extends BasePDFReader {
 
       return {
         pageCount: pdf.numPages,
-        title: metadata?.info?.Title || undefined,
-        author: metadata?.info?.Author || undefined,
-        subject: metadata?.info?.Subject || undefined,
-        keywords: metadata?.info?.Keywords || undefined,
-        creationDate: metadata?.info?.CreationDate
-          ? new Date(metadata.info.CreationDate)
-          : undefined,
-        modificationDate: metadata?.info?.ModDate
-          ? new Date(metadata.info.ModDate)
-          : undefined,
-        version: metadata?.info?.PDFFormatVersion || undefined,
-        creator: metadata?.info?.Creator || undefined,
-        producer: metadata?.info?.Producer || undefined,
-        encrypted: metadata?.info?.Encrypted === 'Yes',
+        title: getMetadataInfoValue(metadata?.info, 'Title'),
+        author: getMetadataInfoValue(metadata?.info, 'Author'),
+        subject: getMetadataInfoValue(metadata?.info, 'Subject'),
+        keywords: getMetadataInfoValue(metadata?.info, 'Keywords'),
+        creationDate: getMetadataInfoDate(metadata?.info, 'CreationDate'),
+        modificationDate: getMetadataInfoDate(metadata?.info, 'ModDate'),
+        version: getMetadataInfoValue(metadata?.info, 'PDFFormatVersion'),
+        creator: getMetadataInfoValue(metadata?.info, 'Creator'),
+        producer: getMetadataInfoValue(metadata?.info, 'Producer'),
+        encrypted: getMetadataInfoValue(metadata?.info, 'Encrypted') === 'Yes',
       };
     } catch (error) {
       console.error('PDF.js metadata extraction failed:', error);
@@ -181,7 +201,7 @@ export class PDFJSProvider extends BasePDFReader {
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         try {
           const page = await pdf.getPage(pageNum);
-          const _operators = await page.getOperatorList();
+          await page.getOperatorList();
 
           // This is a simplified implementation - PDF.js doesn't have
           // a direct equivalent to unpdf's extractImages function
