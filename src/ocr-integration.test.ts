@@ -14,7 +14,7 @@ describe.skipIf(process.env.CI === 'true')(
     const originalTessdataPrefix = process.env.TESSDATA_PREFIX;
 
     beforeAll(async () => {
-      // Default reader (kreuzberg if available)
+      // Default reader (combined Node provider)
       reader = await getPDFReader();
       onnxReader = await getPDFReader({
         provider: 'auto',

@@ -159,7 +159,7 @@ export interface PDFCapabilities {
  *
  * Controls provider selection, OCR behavior, and processing limits. The 'auto'
  * provider setting automatically selects the best available provider for the
- * current environment (unpdf for Node.js, PDF.js for browsers).
+ * current environment (the combined Node reader in Node.js, PDF.js in browsers).
  *
  * @example
  * ```typescript

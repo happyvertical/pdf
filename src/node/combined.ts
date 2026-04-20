@@ -39,13 +39,32 @@ export class CombinedNodeProvider extends BasePDFReader {
   protected name = 'combined-node';
   private unpdfProvider: UnpdfProvider;
   private ocrFactory: ReturnType<typeof getOCR>;
+  private defaultOCROptions?: OCROptions;
   private maxFileSize?: number;
 
-  constructor(options: { ocrProvider?: string; maxFileSize?: number } = {}) {
+  constructor(
+    options: {
+      ocrProvider?: string;
+      defaultOCROptions?: OCROptions;
+      maxFileSize?: number;
+    } = {},
+  ) {
     super();
     this.unpdfProvider = new UnpdfProvider();
     this.ocrFactory = getOCR({ provider: options.ocrProvider || 'auto' });
+    this.defaultOCROptions = options.defaultOCROptions;
     this.maxFileSize = options.maxFileSize;
+  }
+
+  private mergeOCROptions(options?: OCROptions): OCROptions | undefined {
+    if (!this.defaultOCROptions && !options) {
+      return undefined;
+    }
+
+    return {
+      ...(this.defaultOCROptions || {}),
+      ...(options || {}),
+    };
   }
 
   private isInvalidSource(source: PDFSource): boolean {
@@ -221,7 +240,7 @@ export class CombinedNodeProvider extends BasePDFReader {
       };
     }
 
-    return this.ocrFactory.performOCR(renderedPages);
+    return this.ocrFactory.performOCR(renderedPages, this.mergeOCROptions());
   }
 
   private async extractOcrBatchText(
@@ -377,7 +396,10 @@ export class CombinedNodeProvider extends BasePDFReader {
           });
 
           if (renderedPages && renderedPages.length > 0) {
-            const ocrResult = await this.ocrFactory.performOCR(renderedPages);
+            const ocrResult = await this.ocrFactory.performOCR(
+              renderedPages,
+              this.mergeOCROptions(),
+            );
             return ocrResult.text || null;
           }
         } catch (ocrError) {
@@ -430,7 +452,7 @@ export class CombinedNodeProvider extends BasePDFReader {
     images: PDFImage[],
     options?: OCROptions,
   ): Promise<OCRResult> {
-    return this.ocrFactory.performOCR(images, options);
+    return this.ocrFactory.performOCR(images, this.mergeOCROptions(options));
   }
 
   /**

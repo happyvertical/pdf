@@ -5,12 +5,14 @@ import {
   getProviderInfo,
   isProviderAvailable,
 } from './index';
+import { CombinedNodeProvider } from './node/combined';
 import { KreuzbergProvider } from './node/kreuzberg';
 
 describe('PDF Factory Tests', () => {
   it('should create a PDF reader with auto provider selection', async () => {
     const reader = await getPDFReader();
     expect(reader).toBeDefined();
+    expect(reader.constructor.name).toBe('CombinedNodeProvider');
     expect(typeof reader.extractText).toBe('function');
     expect(typeof reader.extractMetadata).toBe('function');
     expect(typeof reader.extractImages).toBe('function');
@@ -23,6 +25,63 @@ describe('PDF Factory Tests', () => {
     const reader = await getPDFReader({ provider: 'unpdf' });
     expect(reader).toBeDefined();
     expect(reader.constructor.name).toBe('CombinedNodeProvider');
+  });
+
+  it('should keep extractImages available when using auto provider selection', async () => {
+    const reader = await getPDFReader({ provider: 'auto' });
+    const capabilities = await reader.checkCapabilities();
+
+    expect(reader.constructor.name).toBe('CombinedNodeProvider');
+    expect(capabilities.canExtractImages).toBe(true);
+  });
+
+  it('should preserve default OCR options when using auto provider selection', async () => {
+    const reader = (await getPDFReader({
+      provider: 'auto',
+      defaultOCROptions: {
+        language: 'fra',
+        confidenceThreshold: 70,
+      },
+    })) as any;
+
+    expect(reader.constructor.name).toBe('CombinedNodeProvider');
+    expect(reader.defaultOCROptions).toMatchObject({
+      language: 'fra',
+      confidenceThreshold: 70,
+    });
+  });
+
+  it('should fall back to Kreuzberg when combined reader dependencies are unavailable', async () => {
+    const combinedDepsSpy = vi
+      .spyOn(CombinedNodeProvider.prototype, 'checkDependencies')
+      .mockResolvedValueOnce({
+        available: false,
+        error: 'page rendering unavailable',
+        details: {
+          unpdf: true,
+          pageRendering: false,
+          ocr: true,
+          ocrProviders: 1,
+        },
+      });
+    const kreuzbergDepsSpy = vi
+      .spyOn(KreuzbergProvider.prototype, 'checkDependencies')
+      .mockResolvedValueOnce({
+        available: true,
+        details: {
+          kreuzberg: true,
+          ocrBackend: undefined,
+          ocrBackends: ['tesseract'],
+        },
+      });
+
+    try {
+      const reader = await getPDFReader({ provider: 'auto' });
+      expect(reader.constructor.name).toBe('KreuzbergProvider');
+    } finally {
+      combinedDepsSpy.mockRestore();
+      kreuzbergDepsSpy.mockRestore();
+    }
   });
 
   it('should route explicit onnx OCR requests to unpdf provider', async () => {

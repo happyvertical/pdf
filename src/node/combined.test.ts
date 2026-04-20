@@ -194,6 +194,84 @@ describe('CombinedNodeProvider', () => {
     expect(reader.ocrFactory.performOCR).toHaveBeenCalledTimes(3);
   });
 
+  it('applies default OCR options during automatic OCR fallback', async () => {
+    const reader = new CombinedNodeProvider({
+      defaultOCROptions: {
+        language: 'fra',
+        confidenceThreshold: 72,
+      },
+    }) as any;
+
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue(''),
+      renderPages: vi.fn().mockResolvedValue([
+        {
+          data: Buffer.from([1]),
+          format: 'rgb',
+          width: 10,
+          height: 10,
+          channels: 3,
+          pageNumber: 1,
+        },
+      ]),
+    };
+    reader.ocrFactory = {
+      performOCR: vi.fn().mockResolvedValue({
+        text: 'bonjour',
+        confidence: 95,
+      }),
+    };
+
+    await expect(reader.extractText('/tmp/scanned.pdf')).resolves.toBe(
+      'bonjour',
+    );
+    expect(reader.ocrFactory.performOCR).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        language: 'fra',
+        confidenceThreshold: 72,
+      }),
+    );
+  });
+
+  it('merges explicit OCR options over configured defaults', async () => {
+    const reader = new CombinedNodeProvider({
+      defaultOCROptions: {
+        language: 'fra',
+        confidenceThreshold: 72,
+      },
+    }) as any;
+    reader.ocrFactory = {
+      performOCR: vi.fn().mockResolvedValue({
+        text: 'bonjour',
+        confidence: 95,
+      }),
+    };
+
+    await reader.performOCR(
+      [
+        {
+          data: Buffer.from([1]),
+          format: 'rgb',
+          width: 10,
+          height: 10,
+          channels: 3,
+        },
+      ],
+      {
+        language: 'eng',
+      },
+    );
+
+    expect(reader.ocrFactory.performOCR).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        language: 'eng',
+        confidenceThreshold: 72,
+      }),
+    );
+  });
+
   it('respects skipOCRFallback for large OCR-recommended PDFs', async () => {
     const reader = new CombinedNodeProvider() as any;
     reader.getSourceByteLength = vi.fn().mockResolvedValue(32 * 1024 * 1024);
