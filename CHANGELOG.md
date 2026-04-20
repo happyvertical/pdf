@@ -1,5 +1,11 @@
 # @happyvertical/pdf
 
+## 0.62.24
+
+### Patch Changes
+
+- 15fc514: Add transparent batched extraction for large PDFs, propagate configured `maxFileSize` through providers, and fail explicitly on incomplete batch extraction instead of returning partial success.
+
 ## 0.62.23
 
 ### Patch Changes
