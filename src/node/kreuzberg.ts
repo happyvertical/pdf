@@ -18,8 +18,39 @@ import type {
   PDFMetadata,
   PDFSource,
 } from '../shared/types';
-import { PDFDependencyError, PDFUnsupportedError } from '../shared/types';
+import {
+  PDFDependencyError,
+  PDFFileSizeError,
+  PDFUnsupportedError,
+} from '../shared/types';
 import { ensureTessdataPrefix, formatPdfOcrRuntimeIssue } from './ocr-runtime';
+
+type KreuzbergExtractionConfig = {
+  ocr?: {
+    backend: string;
+    language?: string;
+    tesseractConfig?: {
+      enableTableDetection?: boolean;
+    };
+  };
+};
+type KreuzbergResult = {
+  content?: string | null;
+  metadata?: Record<string, unknown>;
+};
+type KreuzbergModule = {
+  extractFile(
+    filePath: string,
+    mimeType?: string | null,
+    config?: KreuzbergExtractionConfig | null,
+  ): Promise<KreuzbergResult>;
+  extractBytes(
+    data: Buffer,
+    mimeType: string,
+    config?: KreuzbergExtractionConfig | null,
+  ): Promise<KreuzbergResult>;
+  listOcrBackends?: () => string[];
+};
 
 /**
  * Configuration options for the Kreuzberg provider
@@ -31,6 +62,8 @@ export interface KreuzbergProviderOptions {
   ocrLanguage?: string;
   /** Enable table detection during OCR */
   enableTableDetection?: boolean;
+  /** Optional configured max file size ceiling */
+  maxFileSize?: number;
 }
 
 /**
@@ -50,7 +83,7 @@ export interface KreuzbergProviderOptions {
  */
 export class KreuzbergProvider extends BasePDFReader {
   protected name = 'kreuzberg';
-  private kreuzberg: any = null;
+  private kreuzberg: KreuzbergModule | null = null;
   private options: KreuzbergProviderOptions;
 
   constructor(options: KreuzbergProviderOptions = {}) {
@@ -59,6 +92,7 @@ export class KreuzbergProvider extends BasePDFReader {
       ocrBackend: options.ocrBackend || 'tesseract',
       ocrLanguage: options.ocrLanguage || 'eng',
       enableTableDetection: options.enableTableDetection ?? true,
+      maxFileSize: options.maxFileSize,
     };
   }
 
@@ -96,9 +130,11 @@ export class KreuzbergProvider extends BasePDFReader {
       return source;
     } else if (source instanceof Uint8Array) {
       return Buffer.from(source);
+    } else if (source instanceof ArrayBuffer) {
+      return Buffer.from(source);
     } else {
       throw new Error(
-        'Invalid PDF source: must be file path, Buffer, or Uint8Array',
+        'Invalid PDF source: must be file path, Buffer, ArrayBuffer, or Uint8Array',
       );
     }
   }
@@ -107,17 +143,18 @@ export class KreuzbergProvider extends BasePDFReader {
    * Build Kreuzberg extraction config from options
    */
   private buildConfig(options?: ExtractTextOptions) {
-    const config: any = {};
+    const config: KreuzbergExtractionConfig = {};
 
     // Configure OCR if not explicitly skipped
     if (!options?.skipOCRFallback) {
-      config.ocr = {
-        backend: this.options.ocrBackend,
+      const ocrConfig: NonNullable<KreuzbergExtractionConfig['ocr']> = {
+        backend: this.options.ocrBackend || 'tesseract',
         language: this.options.ocrLanguage,
       };
+      config.ocr = ocrConfig;
 
       if (this.options.enableTableDetection) {
-        config.ocr.tesseractConfig = {
+        ocrConfig.tesseractConfig = {
           enableTableDetection: true,
         };
       }
@@ -148,29 +185,42 @@ export class KreuzbergProvider extends BasePDFReader {
     if (
       !source ||
       (typeof source === 'string' && source.trim() === '') ||
-      (typeof source === 'object' &&
-        Object.keys(source).length === 0 &&
-        !(source instanceof Buffer) &&
-        !(source instanceof Uint8Array))
+      ((source instanceof Buffer ||
+        source instanceof Uint8Array ||
+        source instanceof ArrayBuffer) &&
+        source.byteLength === 0)
     ) {
       return null;
     }
 
     let tessdata = null;
+    let normalizedBuffer: Buffer | null = null;
 
     try {
+      let sourceSize: number;
+      if (typeof source === 'string') {
+        sourceSize = (await fs.stat(source)).size;
+      } else {
+        normalizedBuffer = await this.normalizeSource(source);
+        sourceSize = normalizedBuffer.byteLength;
+      }
+
+      if (this.options.maxFileSize && sourceSize > this.options.maxFileSize) {
+        throw new PDFFileSizeError(sourceSize, this.options.maxFileSize);
+      }
+
       tessdata = await this.prepareOCRRuntime(options);
       const kreuzberg = await this.loadKreuzberg();
       const config = this.buildConfig(options);
 
-      let result;
+      let result: KreuzbergResult | null = null;
 
       if (typeof source === 'string') {
         // File path - use extractFile for best performance
         result = await kreuzberg.extractFile(source, null, config);
       } else {
         // Buffer/Uint8Array - use extractBytes
-        const buffer = await this.normalizeSource(source);
+        const buffer = normalizedBuffer ?? (await this.normalizeSource(source));
         result = await kreuzberg.extractBytes(
           buffer,
           'application/pdf',
@@ -184,6 +234,10 @@ export class KreuzbergProvider extends BasePDFReader {
 
       return result.content;
     } catch (error) {
+      if (error instanceof PDFFileSizeError) {
+        throw error;
+      }
+
       const message = formatPdfOcrRuntimeIssue(error, {
         backend: this.options.ocrBackend,
         language: this.options.ocrLanguage,
@@ -201,7 +255,7 @@ export class KreuzbergProvider extends BasePDFReader {
     try {
       const kreuzberg = await this.loadKreuzberg();
 
-      let result;
+      let result: KreuzbergResult | null = null;
 
       if (typeof source === 'string') {
         result = await kreuzberg.extractFile(source, null, null);
@@ -212,23 +266,50 @@ export class KreuzbergProvider extends BasePDFReader {
 
       // Kreuzberg returns metadata in the result object
       const metadata = result?.metadata || {};
+      const readString = (...keys: string[]): string | undefined => {
+        for (const key of keys) {
+          const value = metadata[key];
+          if (typeof value === 'string') {
+            return value;
+          }
+        }
+        return undefined;
+      };
+      const readNumber = (...keys: string[]): number | undefined => {
+        for (const key of keys) {
+          const value = metadata[key];
+          if (typeof value === 'number') {
+            return value;
+          }
+        }
+        return undefined;
+      };
+      const readBoolean = (...keys: string[]): boolean | undefined => {
+        for (const key of keys) {
+          const value = metadata[key];
+          if (typeof value === 'boolean') {
+            return value;
+          }
+        }
+        return undefined;
+      };
+      const creationDate = readString('creationDate');
+      const modificationDate = readString('modificationDate');
 
       return {
-        pageCount: metadata.pageCount || metadata.page_count || 0,
-        title: metadata.title || undefined,
-        author: metadata.author || undefined,
-        subject: metadata.subject || undefined,
-        keywords: metadata.keywords || undefined,
-        creationDate: metadata.creationDate
-          ? new Date(metadata.creationDate)
+        pageCount: readNumber('pageCount', 'page_count') ?? 0,
+        title: readString('title'),
+        author: readString('author'),
+        subject: readString('subject'),
+        keywords: readString('keywords'),
+        creationDate: creationDate ? new Date(creationDate) : undefined,
+        modificationDate: modificationDate
+          ? new Date(modificationDate)
           : undefined,
-        modificationDate: metadata.modificationDate
-          ? new Date(metadata.modificationDate)
-          : undefined,
-        version: metadata.pdfVersion || metadata.version || undefined,
-        creator: metadata.creator || undefined,
-        producer: metadata.producer || undefined,
-        encrypted: metadata.encrypted || false,
+        version: readString('pdfVersion', 'version'),
+        creator: readString('creator'),
+        producer: readString('producer'),
+        encrypted: readBoolean('encrypted', 'isEncrypted') ?? false,
       };
     } catch (error) {
       console.error('Kreuzberg metadata extraction failed:', error);
@@ -313,7 +394,7 @@ export class KreuzbergProvider extends BasePDFReader {
         'tiff',
         'webp',
       ],
-      maxFileSize: undefined, // Kreuzberg handles streaming for large files
+      maxFileSize: this.options.maxFileSize,
       ocrLanguages: [
         'eng',
         'deu',

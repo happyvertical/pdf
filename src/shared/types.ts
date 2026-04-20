@@ -543,6 +543,36 @@ export class PDFDependencyError extends PDFError {
   }
 }
 
+export class PDFFileSizeError extends PDFError {
+  constructor(
+    public actualSizeBytes: number,
+    public maxSizeBytes: number,
+  ) {
+    const actualMB = (actualSizeBytes / 1024 / 1024).toFixed(1);
+    const limitMB = (maxSizeBytes / 1024 / 1024).toFixed(1);
+    super(`PDF exceeds configured maxFileSize (${actualMB}MB > ${limitMB}MB)`);
+    this.code = 'EMAXFILE';
+    this.name = 'PDFFileSizeError';
+  }
+}
+
+export class PDFBatchExtractionError extends PDFError {
+  constructor(
+    public pages: number[],
+    details?: string,
+  ) {
+    const batchLabel =
+      pages.length > 1
+        ? `${pages[0]}-${pages[pages.length - 1]}`
+        : `${pages[0]}`;
+    super(
+      `Large PDF extraction failed for pages ${batchLabel}${details ? `: ${details}` : ''}`,
+    );
+    this.code = 'EBATCH';
+    this.name = 'PDFBatchExtractionError';
+  }
+}
+
 /**
  * Lightweight PDF document analysis providing processing strategy recommendations
  *

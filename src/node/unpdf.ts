@@ -6,6 +6,15 @@ import { promises as fs } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { Canvas } from '@napi-rs/canvas';
+import type {
+  CanvasRenderingContext2D as NapiCanvasRenderingContext2D,
+  SKRSContext2D,
+} from '@napi-rs/canvas';
+import type {
+  PDFPageProxy,
+  RenderParameters,
+  TextItem,
+} from 'pdfjs-dist/types/src/display/api';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
@@ -22,6 +31,43 @@ import { formatPdfOcrRuntimeIssue } from './ocr-runtime';
 
 const require = createRequire(import.meta.url);
 
+type UnpdfModule = typeof import('unpdf');
+type TextMarkedContent = { type: string; id: string };
+type NodeRenderableContext = NapiCanvasRenderingContext2D | SKRSContext2D;
+type PDFMetadataInfo = Record<string, unknown>;
+
+function readTextItem(item: TextItem | TextMarkedContent): string {
+  return 'str' in item ? item.str : '';
+}
+
+function createNodeRenderParameters(
+  page: PDFPageProxy,
+  canvasContext: NodeRenderableContext,
+  scale: number,
+): RenderParameters {
+  return {
+    canvas: null,
+    canvasContext: canvasContext as unknown as CanvasRenderingContext2D,
+    viewport: page.getViewport({ scale }),
+  };
+}
+
+function getMetadataInfoValue(
+  info: object | null | undefined,
+  key: string,
+): string | undefined {
+  const value = (info as PDFMetadataInfo | null | undefined)?.[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function getMetadataInfoDate(
+  info: object | null | undefined,
+  key: string,
+): Date | undefined {
+  const value = getMetadataInfoValue(info, key);
+  return value ? new Date(value) : undefined;
+}
+
 /**
  * PDF reader implementation using unpdf library for Node.js
  *
@@ -32,7 +78,7 @@ const require = createRequire(import.meta.url);
  */
 export class UnpdfProvider extends BasePDFReader {
   protected name = 'unpdf';
-  private unpdf: any = null;
+  private unpdf: UnpdfModule | null = null;
   private configuredPdfjsWorkerSrc: string | null = null;
 
   private rgbaToRgbBuffer(data: Uint8ClampedArray): Buffer {
@@ -172,10 +218,7 @@ export class UnpdfProvider extends BasePDFReader {
           const textContent = await page.getTextContent();
 
           // Combine text items into a single string
-          const pageText = textContent.items
-            .map((item: any) => item.str || '')
-            .join(' ')
-            .trim();
+          const pageText = textContent.items.map(readTextItem).join(' ').trim();
 
           pageTexts.push(pageText);
         } catch (pageError) {
@@ -214,20 +257,16 @@ export class UnpdfProvider extends BasePDFReader {
 
       return {
         pageCount: pdf.numPages,
-        title: metadata?.info?.Title || undefined,
-        author: metadata?.info?.Author || undefined,
-        subject: metadata?.info?.Subject || undefined,
-        keywords: metadata?.info?.Keywords || undefined,
-        creationDate: metadata?.info?.CreationDate
-          ? new Date(metadata.info.CreationDate)
-          : undefined,
-        modificationDate: metadata?.info?.ModDate
-          ? new Date(metadata.info.ModDate)
-          : undefined,
-        version: metadata?.info?.PDFFormatVersion || undefined,
-        creator: metadata?.info?.Creator || undefined,
-        producer: metadata?.info?.Producer || undefined,
-        encrypted: metadata?.info?.Encrypted === 'Yes',
+        title: getMetadataInfoValue(metadata?.info, 'Title'),
+        author: getMetadataInfoValue(metadata?.info, 'Author'),
+        subject: getMetadataInfoValue(metadata?.info, 'Subject'),
+        keywords: getMetadataInfoValue(metadata?.info, 'Keywords'),
+        creationDate: getMetadataInfoDate(metadata?.info, 'CreationDate'),
+        modificationDate: getMetadataInfoDate(metadata?.info, 'ModDate'),
+        version: getMetadataInfoValue(metadata?.info, 'PDFFormatVersion'),
+        creator: getMetadataInfoValue(metadata?.info, 'Creator'),
+        producer: getMetadataInfoValue(metadata?.info, 'Producer'),
+        encrypted: getMetadataInfoValue(metadata?.info, 'Encrypted') === 'Yes',
       };
     } catch (error) {
       console.error('unpdf metadata extraction failed:', error);
@@ -290,14 +329,14 @@ export class UnpdfProvider extends BasePDFReader {
 
           // Convert unpdf image format to our PDFImage format with BMP conversion
           for (const image of images) {
-            const rawData =
+            const rawData: Buffer =
               image.data instanceof Buffer
                 ? image.data
                 : Buffer.from(image.data);
 
             // Direct RGB data processing - optimal path for OCR
-            let processedData = rawData;
-            let format = image.format || 'unknown';
+            let processedData: Buffer = rawData;
+            let format = 'unknown';
 
             // If we have raw RGB data (3 channels), keep it as raw RGB
             if (image.channels === 3 && image.width && image.height) {
@@ -380,18 +419,16 @@ export class UnpdfProvider extends BasePDFReader {
 
         for (const pageNumber of pagesToRender) {
           const page = await document.getPage(pageNumber);
-          const viewport = page.getViewport({ scale: options?.scale || 2.0 });
+          const scale = options?.scale || 2.0;
+          const viewport = page.getViewport({ scale });
           const width = Math.ceil(viewport.width);
           const height = Math.ceil(viewport.height);
           const canvas = new Canvas(width, height);
           const context = canvas.getContext('2d');
 
           try {
-            await page.render({
-              canvas: canvas as any,
-              canvasContext: context as any,
-              viewport,
-            }).promise;
+            await page.render(createNodeRenderParameters(page, context, scale))
+              .promise;
 
             const imageData = context.getImageData(0, 0, width, height);
 
@@ -509,9 +546,8 @@ export class UnpdfProvider extends BasePDFReader {
             hasEmbeddedText = true;
             // Estimate text length based on sample
             const pageTextLength = content.items.reduce(
-              (len: number, item: any) => {
-                return len + (item.str ? item.str.length : 0);
-              },
+              (len: number, item: TextItem | TextMarkedContent) =>
+                len + readTextItem(item).length,
               0,
             );
             estimatedTextLength += pageTextLength;
@@ -576,8 +612,8 @@ export class UnpdfProvider extends BasePDFReader {
       return {
         pageCount,
         fileSize: buffer.length,
-        version: metadata?.info?.PDFFormatVersion || undefined,
-        encrypted: metadata?.info?.Encrypted === 'Yes',
+        version: getMetadataInfoValue(metadata?.info, 'PDFFormatVersion'),
+        encrypted: getMetadataInfoValue(metadata?.info, 'Encrypted') === 'Yes',
         hasEmbeddedText,
         hasImages,
         estimatedTextLength:
@@ -585,13 +621,11 @@ export class UnpdfProvider extends BasePDFReader {
         recommendedStrategy,
         ocrRequired,
         estimatedProcessingTime,
-        title: metadata?.info?.Title || undefined,
-        author: metadata?.info?.Author || undefined,
-        creationDate: metadata?.info?.CreationDate
-          ? new Date(metadata.info.CreationDate)
-          : undefined,
-        creator: metadata?.info?.Creator || undefined,
-        producer: metadata?.info?.Producer || undefined,
+        title: getMetadataInfoValue(metadata?.info, 'Title'),
+        author: getMetadataInfoValue(metadata?.info, 'Author'),
+        creationDate: getMetadataInfoDate(metadata?.info, 'CreationDate'),
+        creator: getMetadataInfoValue(metadata?.info, 'Creator'),
+        producer: getMetadataInfoValue(metadata?.info, 'Producer'),
       };
     } catch (error) {
       console.error('unpdf getInfo failed:', error);

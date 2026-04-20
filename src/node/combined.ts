@@ -2,6 +2,7 @@
  * @happyvertical/pdf - Combined Node.js PDF reader with unpdf + OCR capabilities
  */
 
+import { stat } from 'node:fs/promises';
 import { getOCR } from '@happyvertical/ocr';
 import { BasePDFReader } from '../shared/base';
 import type {
@@ -15,7 +16,16 @@ import type {
   PDFMetadata,
   PDFSource,
 } from '../shared/types';
+import { PDFBatchExtractionError, PDFFileSizeError } from '../shared/types';
 import { UnpdfProvider } from './unpdf';
+
+const LARGE_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
+const TEXT_BATCH_SIZE = 25;
+const OCR_BATCH_SIZE = 4;
+const HYBRID_BATCH_SIZE = 4;
+const HYBRID_DIRECT_TEXT_MIN_CHARS_PER_PAGE = 50;
+const HYBRID_OCR_CONFIDENCE_THRESHOLD = 85;
+const HYBRID_OCR_LENGTH_ADVANTAGE_RATIO = 1.2;
 
 /**
  * Combined PDF reader for Node.js that integrates unpdf and OCR capabilities
@@ -29,11 +39,288 @@ export class CombinedNodeProvider extends BasePDFReader {
   protected name = 'combined-node';
   private unpdfProvider: UnpdfProvider;
   private ocrFactory: ReturnType<typeof getOCR>;
+  private maxFileSize?: number;
 
-  constructor(options: { ocrProvider?: string } = {}) {
+  constructor(options: { ocrProvider?: string; maxFileSize?: number } = {}) {
     super();
     this.unpdfProvider = new UnpdfProvider();
     this.ocrFactory = getOCR({ provider: options.ocrProvider || 'auto' });
+    this.maxFileSize = options.maxFileSize;
+  }
+
+  private isInvalidSource(source: PDFSource): boolean {
+    if (!source) {
+      return true;
+    }
+
+    if (typeof source === 'string') {
+      return source.trim() === '';
+    }
+
+    if (source instanceof Uint8Array || source instanceof ArrayBuffer) {
+      return source.byteLength === 0;
+    }
+
+    return false;
+  }
+
+  private async getSourceByteLength(
+    source: PDFSource,
+  ): Promise<number | undefined> {
+    if (typeof source === 'string') {
+      try {
+        const info = await stat(source);
+        return info.size;
+      } catch {
+        return undefined;
+      }
+    }
+
+    if (source instanceof Uint8Array) {
+      return source.byteLength;
+    }
+
+    if (source instanceof ArrayBuffer) {
+      return source.byteLength;
+    }
+
+    return undefined;
+  }
+
+  private async assertWithinConfiguredMaxFileSize(
+    source: PDFSource,
+    reportedFileSize?: number,
+  ): Promise<void> {
+    if (!this.maxFileSize) {
+      return;
+    }
+
+    const fileSize =
+      reportedFileSize ?? (await this.getSourceByteLength(source));
+    if (!fileSize || fileSize <= this.maxFileSize) {
+      return;
+    }
+
+    throw new PDFFileSizeError(fileSize, this.maxFileSize);
+  }
+
+  private shouldInspectForBatching(
+    sourceByteLength: number | undefined,
+    options?: ExtractTextOptions,
+  ): boolean {
+    if (sourceByteLength && sourceByteLength >= LARGE_DOCUMENT_BATCH_BYTES) {
+      return true;
+    }
+
+    return Boolean(options?.pages && options.pages.length > OCR_BATCH_SIZE);
+  }
+
+  private chunkPages(pages: number[], batchSize: number): number[][] {
+    const batches: number[][] = [];
+
+    for (let index = 0; index < pages.length; index += batchSize) {
+      batches.push(pages.slice(index, index + batchSize));
+    }
+
+    return batches;
+  }
+
+  private shouldUseBatchedProcessing(
+    info: PDFInfo,
+    pagesToExtract: number[],
+  ): boolean {
+    if (pagesToExtract.length <= 1) {
+      return false;
+    }
+
+    const fileSize = info.fileSize ?? 0;
+    if (fileSize >= LARGE_DOCUMENT_BATCH_BYTES) {
+      return true;
+    }
+
+    if (
+      info.recommendedStrategy === 'ocr' ||
+      info.recommendedStrategy === 'hybrid'
+    ) {
+      return pagesToExtract.length > OCR_BATCH_SIZE;
+    }
+
+    return pagesToExtract.length > TEXT_BATCH_SIZE;
+  }
+
+  private getBatchSizeForStrategy(
+    strategy: PDFInfo['recommendedStrategy'],
+  ): number {
+    if (strategy === 'ocr') {
+      return OCR_BATCH_SIZE;
+    }
+
+    if (strategy === 'hybrid') {
+      return HYBRID_BATCH_SIZE;
+    }
+
+    return TEXT_BATCH_SIZE;
+  }
+
+  private async extractTextPageWise(
+    source: PDFSource,
+    pages: number[],
+    strategy: PDFInfo['recommendedStrategy'],
+    options?: ExtractTextOptions,
+  ): Promise<string[]> {
+    const pageTexts: string[] = [];
+
+    for (const page of pages) {
+      try {
+        if (strategy === 'ocr') {
+          pageTexts.push(await this.extractOcrBatchText(source, [page]));
+        } else if (strategy === 'hybrid') {
+          pageTexts.push(
+            await this.extractHybridBatch(source, [page], options),
+          );
+        } else {
+          pageTexts.push(await this.extractTextBatch(source, [page], options));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new PDFBatchExtractionError([page], message);
+      }
+    }
+
+    return pageTexts;
+  }
+
+  private async extractTextBatch(
+    source: PDFSource,
+    pages: number[],
+    options?: ExtractTextOptions,
+  ): Promise<string> {
+    return (
+      (await this.unpdfProvider.extractText(source, {
+        ...options,
+        pages,
+        mergePages: true,
+        skipOCRFallback: true,
+      })) ?? ''
+    ).trim();
+  }
+
+  private async extractOcrBatch(
+    source: PDFSource,
+    pages: number[],
+  ): Promise<OCRResult> {
+    const renderedPages = await this.unpdfProvider.renderPages(source, {
+      scale: 2.0,
+      pages,
+    });
+
+    if (!renderedPages.length) {
+      return {
+        text: '',
+        confidence: 0,
+      };
+    }
+
+    return this.ocrFactory.performOCR(renderedPages);
+  }
+
+  private async extractOcrBatchText(
+    source: PDFSource,
+    pages: number[],
+  ): Promise<string> {
+    const ocrResult = await this.extractOcrBatch(source, pages);
+    return ocrResult.text?.trim() || '';
+  }
+
+  private async extractHybridBatch(
+    source: PDFSource,
+    pages: number[],
+    options?: ExtractTextOptions,
+  ): Promise<string> {
+    const directText = await this.extractTextBatch(source, pages, options);
+    const directTextLooksComplete =
+      directText.length >= pages.length * HYBRID_DIRECT_TEXT_MIN_CHARS_PER_PAGE;
+
+    if (directTextLooksComplete) {
+      return directText;
+    }
+
+    try {
+      const ocrResult = await this.extractOcrBatch(source, pages);
+      const ocrText = ocrResult.text?.trim() || '';
+
+      if (!ocrText) {
+        return directText;
+      }
+
+      if (!directText) {
+        return ocrText;
+      }
+
+      // Only prefer OCR when it is materially richer than the embedded text
+      // and the OCR engine is reporting a meaningfully strong confidence score.
+      const confidence = ocrResult.confidence ?? 0;
+      return confidence >= HYBRID_OCR_CONFIDENCE_THRESHOLD &&
+        ocrText.length > directText.length * HYBRID_OCR_LENGTH_ADVANTAGE_RATIO
+        ? ocrText
+        : directText;
+    } catch (error) {
+      if (directText) {
+        return directText;
+      }
+
+      throw error;
+    }
+  }
+
+  private async extractTextBatched(
+    source: PDFSource,
+    info: PDFInfo,
+    pagesToExtract: number[],
+    options?: ExtractTextOptions,
+  ): Promise<string | null> {
+    const strategy = options?.skipOCRFallback
+      ? 'text'
+      : info.recommendedStrategy;
+
+    if (options?.mergePages !== true) {
+      const pageTexts = await this.extractTextPageWise(
+        source,
+        pagesToExtract,
+        strategy,
+        options,
+      );
+      const mergedText = this.mergePageTexts(pageTexts, false);
+      return mergedText.trim() ? mergedText : null;
+    }
+
+    const batchTexts: string[] = [];
+    const batches = this.chunkPages(
+      pagesToExtract,
+      this.getBatchSizeForStrategy(strategy),
+    );
+
+    for (const pages of batches) {
+      try {
+        let batchText = '';
+
+        if (strategy === 'ocr') {
+          batchText = await this.extractOcrBatchText(source, pages);
+        } else if (strategy === 'hybrid') {
+          batchText = await this.extractHybridBatch(source, pages, options);
+        } else {
+          batchText = await this.extractTextBatch(source, pages, options);
+        }
+
+        batchTexts.push(batchText);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new PDFBatchExtractionError(pages, message);
+      }
+    }
+
+    const mergedText = this.mergePageTexts(batchTexts, options?.mergePages);
+    return mergedText.trim() ? mergedText : null;
   }
 
   /**
@@ -43,7 +330,37 @@ export class CombinedNodeProvider extends BasePDFReader {
     source: PDFSource,
     options?: ExtractTextOptions,
   ): Promise<string | null> {
+    if (this.isInvalidSource(source)) {
+      return null;
+    }
+
     try {
+      const sourceByteLength = await this.getSourceByteLength(source);
+      await this.assertWithinConfiguredMaxFileSize(source, sourceByteLength);
+
+      if (this.shouldInspectForBatching(sourceByteLength, options)) {
+        const info = await this.getInfo(source);
+
+        if (info.pageCount > 0) {
+          const pagesToExtract = this.normalizePages(
+            options?.pages,
+            info.pageCount,
+          );
+
+          if (
+            pagesToExtract.length > 0 &&
+            this.shouldUseBatchedProcessing(info, pagesToExtract)
+          ) {
+            return this.extractTextBatched(
+              source,
+              info,
+              pagesToExtract,
+              options,
+            );
+          }
+        }
+      }
+
       // First try direct text extraction using unpdf
       const text = await this.unpdfProvider.extractText(source, options);
 
@@ -70,6 +387,13 @@ export class CombinedNodeProvider extends BasePDFReader {
 
       return text;
     } catch (error) {
+      if (
+        error instanceof PDFBatchExtractionError ||
+        error instanceof PDFFileSizeError
+      ) {
+        throw error;
+      }
+
       console.error('Combined text extraction failed:', error);
       return null;
     }
@@ -124,13 +448,18 @@ export class CombinedNodeProvider extends BasePDFReader {
       ocrLanguages = await this.ocrFactory.getSupportedLanguages();
     }
 
+    const maxFileSize =
+      this.maxFileSize && unpdfCaps.maxFileSize
+        ? Math.min(this.maxFileSize, unpdfCaps.maxFileSize)
+        : (this.maxFileSize ?? unpdfCaps.maxFileSize);
+
     return {
       canExtractText: unpdfCaps.canExtractText || ocrAvailable, // Can extract text directly or via OCR
       canExtractMetadata: unpdfCaps.canExtractMetadata,
       canExtractImages: unpdfCaps.canExtractImages,
       canPerformOCR: ocrAvailable,
       supportedFormats: unpdfCaps.supportedFormats,
-      maxFileSize: unpdfCaps.maxFileSize,
+      maxFileSize,
       ocrLanguages: ocrLanguages.length > 0 ? ocrLanguages : undefined,
     };
   }

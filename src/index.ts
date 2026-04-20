@@ -19,6 +19,7 @@ export * from './shared/types';
 
 // Legacy compatibility exports for backward compatibility with existing code
 import { getPDFReader, initializeProviders } from './shared/factory';
+import type { PDFImage } from './shared/types';
 
 /**
  * Extract text from a PDF file (legacy compatibility)
@@ -39,7 +40,7 @@ export async function extractTextFromPDF(
 export async function extractImagesFromPDF(
   pdfPath: string,
   options?: { provider?: 'unpdf' | 'kreuzberg' | 'auto' },
-): Promise<any[] | null> {
+): Promise<PDFImage[] | null> {
   const reader = await getPDFReader({ provider: options?.provider ?? 'unpdf' });
   const images = await reader.extractImages(pdfPath);
   return images.length > 0 ? images : null;
@@ -51,7 +52,7 @@ export async function extractImagesFromPDF(
  * @note Requires unpdf provider - kreuzberg integrates OCR into extractText()
  */
 export async function performOCROnImages(
-  images: any[],
+  images: PDFImage[],
   options?: { provider?: 'unpdf' | 'kreuzberg' | 'auto' },
 ): Promise<string> {
   const reader = await getPDFReader({ provider: options?.provider ?? 'unpdf' });
