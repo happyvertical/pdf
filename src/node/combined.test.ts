@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PDFBatchExtractionError, PDFFileSizeError } from '../shared/types';
 import { CombinedNodeProvider } from './combined';
 import { UnpdfProvider } from './unpdf';
 
@@ -35,6 +36,7 @@ describe('CombinedNodeProvider', () => {
 
   it('batches large text-based PDFs and preserves batch order when pages are merged', async () => {
     const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(40 * 1024 * 1024);
 
     reader.getInfo = vi.fn().mockResolvedValue({
       pageCount: 60,
@@ -75,6 +77,7 @@ describe('CombinedNodeProvider', () => {
 
   it('preserves per-page boundaries for large text PDFs when mergePages is false', async () => {
     const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(40 * 1024 * 1024);
 
     reader.getInfo = vi.fn().mockResolvedValue({
       pageCount: 4,
@@ -113,8 +116,39 @@ describe('CombinedNodeProvider', () => {
     );
   });
 
+  it('preserves per-page boundaries by default for large text PDFs', async () => {
+    const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(40 * 1024 * 1024);
+
+    reader.getInfo = vi.fn().mockResolvedValue({
+      pageCount: 3,
+      fileSize: 40 * 1024 * 1024,
+      encrypted: false,
+      hasEmbeddedText: true,
+      hasImages: false,
+      recommendedStrategy: 'text',
+      ocrRequired: false,
+      estimatedProcessingTime: {
+        textExtraction: 'slow',
+      },
+    });
+
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockImplementation(async (_source, options) => {
+        const page = options?.pages?.[0];
+        return `page-${page}`;
+      }),
+    };
+
+    const text = await reader.extractText('/tmp/large.pdf');
+
+    expect(text).toBe('page-1\n\npage-2\n\npage-3');
+    expect(reader.unpdfProvider.extractText).toHaveBeenCalledTimes(3);
+  });
+
   it('batches OCR extraction for large image-based PDFs', async () => {
     const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(30 * 1024 * 1024);
 
     reader.getInfo = vi.fn().mockResolvedValue({
       pageCount: 9,
@@ -162,6 +196,7 @@ describe('CombinedNodeProvider', () => {
 
   it('respects skipOCRFallback for large OCR-recommended PDFs', async () => {
     const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(32 * 1024 * 1024);
 
     reader.getInfo = vi.fn().mockResolvedValue({
       pageCount: 8,
@@ -199,6 +234,7 @@ describe('CombinedNodeProvider', () => {
 
   it('falls back to OCR for sparse hybrid batches', async () => {
     const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(32 * 1024 * 1024);
 
     reader.getInfo = vi.fn().mockResolvedValue({
       pageCount: 8,
@@ -253,6 +289,7 @@ describe('CombinedNodeProvider', () => {
 
   it('throws on mid-batch failures instead of returning partial text', async () => {
     const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(40 * 1024 * 1024);
 
     reader.getInfo = vi.fn().mockResolvedValue({
       pageCount: 60,
@@ -274,9 +311,50 @@ describe('CombinedNodeProvider', () => {
         .mockRejectedValueOnce(new Error('page parse failed')),
     };
 
-    await expect(reader.extractText('/tmp/broken.pdf')).rejects.toThrow(
+    const extractionPromise = reader.extractText('/tmp/broken.pdf', {
+      mergePages: true,
+    });
+
+    await expect(extractionPromise).rejects.toBeInstanceOf(
+      PDFBatchExtractionError,
+    );
+    await expect(extractionPromise).rejects.toThrow(
       'Large PDF extraction failed for pages 26-50: page parse failed',
     );
+  });
+
+  it('throws configured maxFileSize before analyzing oversized inputs', async () => {
+    const reader = new CombinedNodeProvider({ maxFileSize: 4 }) as any;
+    reader.getInfo = vi.fn();
+
+    await expect(
+      reader.extractText(new Uint8Array([1, 2, 3, 4, 5])),
+    ).rejects.toBeInstanceOf(PDFFileSizeError);
+    expect(reader.getInfo).not.toHaveBeenCalled();
+  });
+
+  it('skips expensive getInfo for small inputs without paging hints', async () => {
+    const reader = new CombinedNodeProvider() as any;
+    reader.getInfo = vi.fn();
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue('direct text'),
+    };
+
+    await expect(
+      reader.extractText(new Uint8Array([1, 2, 3, 4])),
+    ).resolves.toBe('direct text');
+    expect(reader.getInfo).not.toHaveBeenCalled();
+  });
+
+  it('accepts ArrayBuffer sources in the direct extraction path', async () => {
+    const reader = new CombinedNodeProvider() as any;
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue('array-buffer-text'),
+    };
+
+    await expect(
+      reader.extractText(new Uint8Array([1, 2, 3, 4]).buffer),
+    ).resolves.toBe('array-buffer-text');
   });
 
   it('reports configured maxFileSize through capabilities', async () => {

@@ -50,6 +50,12 @@ describe('PDF Factory Tests', () => {
     );
   });
 
+  it('should reject unknown provider values instead of silently falling back', async () => {
+    await expect(getPDFReader({ provider: 'unpfd' as any })).rejects.toThrow(
+      'Unknown PDF provider: unpfd',
+    );
+  });
+
   it('should return available providers for Node.js environment', () => {
     const providers = getAvailableProviders();
     expect(Array.isArray(providers)).toBe(true);
@@ -126,7 +132,7 @@ describe('PDF Factory Tests', () => {
     });
 
     await expect(
-      reader.extractText(new Uint8Array([1, 2, 3, 4])),
+      reader.extractText(new Uint8Array([1, 2, 3, 4]).buffer),
     ).resolves.toBe('ok');
     expect(reader.normalizeSource).toHaveBeenCalledTimes(1);
   });

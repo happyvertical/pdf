@@ -16,6 +16,7 @@ import type {
   PDFMetadata,
   PDFSource,
 } from '../shared/types';
+import { PDFBatchExtractionError, PDFFileSizeError } from '../shared/types';
 import { UnpdfProvider } from './unpdf';
 
 const LARGE_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
@@ -23,6 +24,8 @@ const TEXT_BATCH_SIZE = 25;
 const OCR_BATCH_SIZE = 4;
 const HYBRID_BATCH_SIZE = 4;
 const HYBRID_DIRECT_TEXT_MIN_CHARS_PER_PAGE = 50;
+const HYBRID_OCR_CONFIDENCE_THRESHOLD = 85;
+const HYBRID_OCR_LENGTH_ADVANTAGE_RATIO = 1.2;
 
 /**
  * Combined PDF reader for Node.js that integrates unpdf and OCR capabilities
@@ -46,14 +49,19 @@ export class CombinedNodeProvider extends BasePDFReader {
   }
 
   private isInvalidSource(source: PDFSource): boolean {
-    return (
-      !source ||
-      (typeof source === 'string' && source.trim() === '') ||
-      (typeof source === 'object' &&
-        Object.keys(source).length === 0 &&
-        !(source instanceof Buffer) &&
-        !(source instanceof Uint8Array))
-    );
+    if (!source) {
+      return true;
+    }
+
+    if (typeof source === 'string') {
+      return source.trim() === '';
+    }
+
+    if (source instanceof Uint8Array || source instanceof ArrayBuffer) {
+      return source.byteLength === 0;
+    }
+
+    return false;
   }
 
   private async getSourceByteLength(
@@ -93,11 +101,18 @@ export class CombinedNodeProvider extends BasePDFReader {
       return;
     }
 
-    const actualMB = (fileSize / 1024 / 1024).toFixed(1);
-    const limitMB = (this.maxFileSize / 1024 / 1024).toFixed(1);
-    throw new Error(
-      `PDF exceeds configured maxFileSize (${actualMB}MB > ${limitMB}MB)`,
-    );
+    throw new PDFFileSizeError(fileSize, this.maxFileSize);
+  }
+
+  private shouldInspectForBatching(
+    sourceByteLength: number | undefined,
+    options?: ExtractTextOptions,
+  ): boolean {
+    if (sourceByteLength && sourceByteLength >= LARGE_DOCUMENT_BATCH_BYTES) {
+      return true;
+    }
+
+    return Boolean(options?.pages && options.pages.length > OCR_BATCH_SIZE);
   }
 
   private chunkPages(pages: number[], batchSize: number): number[][] {
@@ -113,12 +128,7 @@ export class CombinedNodeProvider extends BasePDFReader {
   private shouldUseBatchedProcessing(
     info: PDFInfo,
     pagesToExtract: number[],
-    options?: ExtractTextOptions,
   ): boolean {
-    if (options?.pages && pagesToExtract.length <= 1) {
-      return false;
-    }
-
     if (pagesToExtract.length <= 1) {
       return false;
     }
@@ -161,12 +171,19 @@ export class CombinedNodeProvider extends BasePDFReader {
     const pageTexts: string[] = [];
 
     for (const page of pages) {
-      if (strategy === 'ocr') {
-        pageTexts.push(await this.extractOcrBatch(source, [page]));
-      } else if (strategy === 'hybrid') {
-        pageTexts.push(await this.extractHybridBatch(source, [page], options));
-      } else {
-        pageTexts.push(await this.extractTextBatch(source, [page], options));
+      try {
+        if (strategy === 'ocr') {
+          pageTexts.push(await this.extractOcrBatchText(source, [page]));
+        } else if (strategy === 'hybrid') {
+          pageTexts.push(
+            await this.extractHybridBatch(source, [page], options),
+          );
+        } else {
+          pageTexts.push(await this.extractTextBatch(source, [page], options));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new PDFBatchExtractionError([page], message);
       }
     }
 
@@ -191,17 +208,27 @@ export class CombinedNodeProvider extends BasePDFReader {
   private async extractOcrBatch(
     source: PDFSource,
     pages: number[],
-  ): Promise<string> {
+  ): Promise<OCRResult> {
     const renderedPages = await this.unpdfProvider.renderPages(source, {
       scale: 2.0,
       pages,
     });
 
     if (!renderedPages.length) {
-      return '';
+      return {
+        text: '',
+        confidence: 0,
+      };
     }
 
-    const ocrResult = await this.ocrFactory.performOCR(renderedPages);
+    return this.ocrFactory.performOCR(renderedPages);
+  }
+
+  private async extractOcrBatchText(
+    source: PDFSource,
+    pages: number[],
+  ): Promise<string> {
+    const ocrResult = await this.extractOcrBatch(source, pages);
     return ocrResult.text?.trim() || '';
   }
 
@@ -219,7 +246,9 @@ export class CombinedNodeProvider extends BasePDFReader {
     }
 
     try {
-      const ocrText = await this.extractOcrBatch(source, pages);
+      const ocrResult = await this.extractOcrBatch(source, pages);
+      const ocrText = ocrResult.text?.trim() || '';
+
       if (!ocrText) {
         return directText;
       }
@@ -228,7 +257,13 @@ export class CombinedNodeProvider extends BasePDFReader {
         return ocrText;
       }
 
-      return ocrText.length > directText.length * 1.2 ? ocrText : directText;
+      // Only prefer OCR when it is materially richer than the embedded text
+      // and the OCR engine is reporting a meaningfully strong confidence score.
+      const confidence = ocrResult.confidence ?? 0;
+      return confidence >= HYBRID_OCR_CONFIDENCE_THRESHOLD &&
+        ocrText.length > directText.length * HYBRID_OCR_LENGTH_ADVANTAGE_RATIO
+        ? ocrText
+        : directText;
     } catch (error) {
       if (directText) {
         return directText;
@@ -248,7 +283,7 @@ export class CombinedNodeProvider extends BasePDFReader {
       ? 'text'
       : info.recommendedStrategy;
 
-    if (options?.mergePages === false) {
+    if (options?.mergePages !== true) {
       const pageTexts = await this.extractTextPageWise(
         source,
         pagesToExtract,
@@ -266,13 +301,11 @@ export class CombinedNodeProvider extends BasePDFReader {
     );
 
     for (const pages of batches) {
-      const batchLabel = `${pages[0]}-${pages[pages.length - 1]}`;
-
       try {
         let batchText = '';
 
         if (strategy === 'ocr') {
-          batchText = await this.extractOcrBatch(source, pages);
+          batchText = await this.extractOcrBatchText(source, pages);
         } else if (strategy === 'hybrid') {
           batchText = await this.extractHybridBatch(source, pages, options);
         } else {
@@ -282,9 +315,7 @@ export class CombinedNodeProvider extends BasePDFReader {
         batchTexts.push(batchText);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(
-          `Large PDF extraction failed for pages ${batchLabel}: ${message}`,
-        );
+        throw new PDFBatchExtractionError(pages, message);
       }
     }
 
@@ -304,20 +335,29 @@ export class CombinedNodeProvider extends BasePDFReader {
     }
 
     try {
-      const info = await this.getInfo(source);
-      await this.assertWithinConfiguredMaxFileSize(source, info.fileSize);
+      const sourceByteLength = await this.getSourceByteLength(source);
+      await this.assertWithinConfiguredMaxFileSize(source, sourceByteLength);
 
-      if (info.pageCount > 0) {
-        const pagesToExtract = this.normalizePages(
-          options?.pages,
-          info.pageCount,
-        );
+      if (this.shouldInspectForBatching(sourceByteLength, options)) {
+        const info = await this.getInfo(source);
 
-        if (
-          pagesToExtract.length > 0 &&
-          this.shouldUseBatchedProcessing(info, pagesToExtract, options)
-        ) {
-          return this.extractTextBatched(source, info, pagesToExtract, options);
+        if (info.pageCount > 0) {
+          const pagesToExtract = this.normalizePages(
+            options?.pages,
+            info.pageCount,
+          );
+
+          if (
+            pagesToExtract.length > 0 &&
+            this.shouldUseBatchedProcessing(info, pagesToExtract)
+          ) {
+            return this.extractTextBatched(
+              source,
+              info,
+              pagesToExtract,
+              options,
+            );
+          }
         }
       }
 
@@ -348,9 +388,8 @@ export class CombinedNodeProvider extends BasePDFReader {
       return text;
     } catch (error) {
       if (
-        error instanceof Error &&
-        (error.message.includes('Large PDF extraction failed') ||
-          error.message.includes('configured maxFileSize'))
+        error instanceof PDFBatchExtractionError ||
+        error instanceof PDFFileSizeError
       ) {
         throw error;
       }

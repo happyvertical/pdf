@@ -143,9 +143,12 @@ export async function getPDFReader(
     },
   });
 
-  const provider = isRuntimeProvider(config.provider ?? 'auto')
-    ? (config.provider ?? 'auto')
-    : 'auto';
+  const requestedProvider = config.provider ?? 'auto';
+  if (!isRuntimeProvider(requestedProvider)) {
+    throw new Error(`Unknown PDF provider: ${requestedProvider}`);
+  }
+
+  const provider = requestedProvider;
   const readerOptions: PDFReaderOptions = { ...config, provider };
 
   // Environment detection for automatic provider selection
