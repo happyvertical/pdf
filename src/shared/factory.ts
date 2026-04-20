@@ -7,6 +7,15 @@ import type { PDFReader, PDFReaderOptions } from './types';
 
 type RuntimeProvider = NonNullable<PDFReaderOptions['provider']>;
 
+async function isKreuzbergAvailable(): Promise<boolean> {
+  try {
+    await import('@kreuzberg/node');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function requiresExternalOCRProvider(ocrProvider?: string): boolean {
   return Boolean(
     ocrProvider && ocrProvider !== 'auto' && ocrProvider !== 'tesseract',
@@ -36,6 +45,42 @@ function isRuntimeProvider(value: string): value is RuntimeProvider {
     value === 'pdfjs' ||
     value === 'kreuzberg'
   );
+}
+
+async function canUseCombinedNodeProvider(
+  options: PDFReaderOptions,
+): Promise<boolean> {
+  try {
+    const { CombinedNodeProvider } = await import('../node/combined.js');
+    const reader = new CombinedNodeProvider({
+      ocrProvider: options.ocrProvider,
+      defaultOCROptions: options.defaultOCROptions,
+      maxFileSize: options.maxFileSize,
+    });
+    const deps = await reader.checkDependencies();
+    return deps.available;
+  } catch {
+    return false;
+  }
+}
+
+async function canUseKreuzberg(options: PDFReaderOptions): Promise<boolean> {
+  if (!(await isKreuzbergAvailable())) {
+    return false;
+  }
+
+  try {
+    const { KreuzbergProvider } = await import('../node/kreuzberg.js');
+    const reader = new KreuzbergProvider({
+      ocrBackend: options.ocrProvider,
+      ocrLanguage: options.defaultOCROptions?.language,
+      maxFileSize: options.maxFileSize,
+    });
+    const deps = await reader.checkDependencies();
+    return deps.available;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -130,7 +175,15 @@ export async function getPDFReader(
   let selectedProvider = provider;
   if (provider === 'auto') {
     if (isNode) {
-      selectedProvider = 'unpdf';
+      if (requiresExternalOCRProvider(readerOptions.ocrProvider)) {
+        selectedProvider = 'unpdf';
+      } else if (await canUseCombinedNodeProvider(readerOptions)) {
+        selectedProvider = 'unpdf';
+      } else if (await canUseKreuzberg(readerOptions)) {
+        selectedProvider = 'kreuzberg';
+      } else {
+        selectedProvider = 'unpdf';
+      }
     } else if (isBrowser) {
       selectedProvider = 'pdfjs'; // Use PDF.js for browser
     } else {
@@ -155,6 +208,7 @@ export async function getPDFReader(
       const { CombinedNodeProvider } = await import('../node/combined.js');
       return new CombinedNodeProvider({
         ocrProvider: readerOptions.ocrProvider as string | undefined,
+        defaultOCROptions: readerOptions.defaultOCROptions,
         maxFileSize: readerOptions.maxFileSize,
       });
     }
