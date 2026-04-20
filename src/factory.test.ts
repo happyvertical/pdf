@@ -11,6 +11,7 @@ describe('PDF Factory Tests', () => {
   it('should create a PDF reader with auto provider selection', async () => {
     const reader = await getPDFReader();
     expect(reader).toBeDefined();
+    expect(reader.constructor.name).toBe('CombinedNodeProvider');
     expect(typeof reader.extractText).toBe('function');
     expect(typeof reader.extractMetadata).toBe('function');
     expect(typeof reader.extractImages).toBe('function');
@@ -23,6 +24,14 @@ describe('PDF Factory Tests', () => {
     const reader = await getPDFReader({ provider: 'unpdf' });
     expect(reader).toBeDefined();
     expect(reader.constructor.name).toBe('CombinedNodeProvider');
+  });
+
+  it('should keep extractImages available when using auto provider selection', async () => {
+    const reader = await getPDFReader({ provider: 'auto' });
+    const capabilities = await reader.checkCapabilities();
+
+    expect(reader.constructor.name).toBe('CombinedNodeProvider');
+    expect(capabilities.canExtractImages).toBe(true);
   });
 
   it('should route explicit onnx OCR requests to unpdf provider', async () => {

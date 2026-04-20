@@ -53,6 +53,17 @@ describe('PDF Content Extraction', () => {
     }
   });
 
+  it('should keep image extraction working with the auto reader', async () => {
+    const images = await reader.extractImages(pdfPath);
+
+    expect(images.length).toBe(3);
+    for (const image of images) {
+      expect(image.data).toBeDefined();
+      expect(image.width).toBeGreaterThan(0);
+      expect(image.height).toBeGreaterThan(0);
+    }
+  });
+
   it('should extract text from scanned PDF via OCR fallback', async () => {
     const text = await reader.extractText(pdfPath);
 

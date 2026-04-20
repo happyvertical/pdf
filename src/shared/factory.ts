@@ -7,18 +7,6 @@ import type { PDFReader, PDFReaderOptions } from './types';
 
 type RuntimeProvider = NonNullable<PDFReaderOptions['provider']>;
 
-/**
- * Check if the kreuzberg provider is available (optional dependency)
- */
-async function isKreuzbergAvailable(): Promise<boolean> {
-  try {
-    await import('@kreuzberg/node');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function requiresExternalOCRProvider(ocrProvider?: string): boolean {
   return Boolean(
     ocrProvider && ocrProvider !== 'auto' && ocrProvider !== 'tesseract',
@@ -50,24 +38,6 @@ function isRuntimeProvider(value: string): value is RuntimeProvider {
   );
 }
 
-async function canUseKreuzberg(options: PDFReaderOptions): Promise<boolean> {
-  if (!(await isKreuzbergAvailable())) {
-    return false;
-  }
-
-  try {
-    const { KreuzbergProvider } = await import('../node/kreuzberg.js');
-    const reader = new KreuzbergProvider({
-      ocrBackend: options.ocrProvider,
-      ocrLanguage: options.defaultOCROptions?.language,
-    });
-    const deps = await reader.checkDependencies();
-    return deps.available;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Create a PDF reader instance with intelligent provider selection and configuration
  *
@@ -85,7 +55,7 @@ async function canUseKreuzberg(options: PDFReaderOptions): Promise<boolean> {
  * @example
  * ```typescript
  * // Auto-detect best provider for current environment
- * // In Node.js: uses kreuzberg if available, else unpdf
+ * // In Node.js: uses the combined provider so text, images, and OCR stay coherent
  * const reader = await getPDFReader();
  *
  * // Configure with specific options
@@ -160,14 +130,7 @@ export async function getPDFReader(
   let selectedProvider = provider;
   if (provider === 'auto') {
     if (isNode) {
-      // Route non-Tesseract OCR providers through the unpdf + @happyvertical/ocr path.
-      if (requiresExternalOCRProvider(readerOptions.ocrProvider)) {
-        selectedProvider = 'unpdf';
-      } else {
-        selectedProvider = (await canUseKreuzberg(readerOptions))
-          ? 'kreuzberg'
-          : 'unpdf';
-      }
+      selectedProvider = 'unpdf';
     } else if (isBrowser) {
       selectedProvider = 'pdfjs'; // Use PDF.js for browser
     } else {
@@ -186,7 +149,9 @@ export async function getPDFReader(
         );
       }
 
-      // Dynamic import to avoid bundling Node.js code in browser
+      // Dynamic import to avoid bundling Node.js code in browser.
+      // The combined Node provider keeps modular operations like extractImages()
+      // available even when callers start from provider: 'auto'.
       const { CombinedNodeProvider } = await import('../node/combined.js');
       return new CombinedNodeProvider({
         ocrProvider: readerOptions.ocrProvider as string | undefined,
