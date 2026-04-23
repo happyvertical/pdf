@@ -488,6 +488,54 @@ describe('CombinedNodeProvider', () => {
 });
 
 describe('UnpdfProvider', () => {
+  it('configures unpdf to use the official pdfjs-dist legacy runtime', async () => {
+    const reader = new UnpdfProvider() as any;
+
+    reader.ensurePdfjsWorkerConfigured = vi.fn().mockResolvedValue(undefined);
+
+    const definePDFJSModule = vi
+      .fn()
+      .mockImplementation(async (resolver: () => Promise<unknown>) => {
+        const resolved = await resolver();
+        const expected = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+        expect(resolved).toBe(expected);
+      });
+
+    await reader.ensureUnpdfPdfjsRuntime({ definePDFJSModule });
+    await reader.ensureUnpdfPdfjsRuntime({ definePDFJSModule });
+
+    expect(definePDFJSModule).toHaveBeenCalledTimes(1);
+    expect(reader.ensurePdfjsWorkerConfigured).not.toHaveBeenCalled();
+  });
+
+  it('resolves pdfjs asset directories as filesystem paths for Node rendering flows', () => {
+    const reader = new UnpdfProvider() as any;
+
+    const options = reader.getPdfjsDocumentOptions(true);
+
+    expect(options).toMatchObject({
+      useWorkerFetch: false,
+      standardFontDataUrl: expect.stringMatching(/\/$/),
+      wasmUrl: expect.stringMatching(/\/$/),
+    });
+    expect(options.standardFontDataUrl).not.toMatch(/^file:\/\//);
+    expect(options.wasmUrl).not.toMatch(/^file:\/\//);
+  });
+
+  it('tolerates missing optional pdfjs asset bundles', () => {
+    const reader = new UnpdfProvider() as any;
+
+    vi.spyOn(reader, 'resolveOptionalPdfjsAssetDirectory')
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce('/tmp/pdfjs-wasm/');
+
+    expect(reader.getPdfjsDocumentOptions(true)).toEqual({
+      useWorkerFetch: false,
+      wasmUrl: '/tmp/pdfjs-wasm/',
+    });
+  });
+
   it('should surface page rendering dependency failures', async () => {
     const reader = new UnpdfProvider() as any;
 
@@ -552,10 +600,54 @@ describe('UnpdfProvider', () => {
     expect(result).toEqual([]);
     expect(seenBatches).toEqual([[1, 2], [3, 4], [5]]);
     expect(getDocumentProxy).toHaveBeenCalledTimes(4);
+    expect(getDocumentProxy.mock.calls[0]?.[1]).toEqual({
+      useWorkerFetch: false,
+    });
+    for (const [, options] of getDocumentProxy.mock.calls.slice(1)) {
+      expect(options).toMatchObject({
+        useWorkerFetch: false,
+        standardFontDataUrl: expect.stringMatching(/\/$/),
+        wasmUrl: expect.stringMatching(/\/$/),
+      });
+      expect(options.standardFontDataUrl).not.toMatch(/^file:\/\//);
+      expect(options.wasmUrl).not.toMatch(/^file:\/\//);
+    }
     for (const document of documents) {
       expect(document.cleanup).toHaveBeenCalledOnce();
       expect(document.destroy).toHaveBeenCalledOnce();
     }
+  });
+
+  it('passes file-backed getInfo sources through without forcing an extra buffer clone', async () => {
+    const reader = new UnpdfProvider() as any;
+    const unpdf = {};
+    const pdf = {
+      numPages: 1,
+      getMetadata: vi.fn().mockResolvedValue({ info: {} }),
+      getPage: vi.fn().mockResolvedValue({
+        getTextContent: vi.fn().mockResolvedValue({ items: [] }),
+        getOperatorList: vi.fn().mockResolvedValue({ fnArray: [] }),
+      }),
+      cleanup: vi.fn(),
+      destroy: vi.fn(),
+    };
+
+    reader.loadUnpdf = vi.fn().mockResolvedValue(unpdf);
+    reader.loadPDFDocument = vi.fn().mockResolvedValue(pdf);
+    reader.getSourceFileSize = vi.fn().mockResolvedValue(1234);
+
+    await expect(reader.getInfo('/tmp/document.pdf')).resolves.toMatchObject({
+      fileSize: 1234,
+      pageCount: 1,
+    });
+
+    expect(reader.loadPDFDocument).toHaveBeenCalledWith(
+      unpdf,
+      '/tmp/document.pdf',
+    );
+    expect(reader.getSourceFileSize).toHaveBeenCalledWith('/tmp/document.pdf');
+    expect(pdf.cleanup).toHaveBeenCalledOnce();
+    expect(pdf.destroy).toHaveBeenCalledOnce();
   });
 
   it('returns an empty list for zero-length byte sources', async () => {
