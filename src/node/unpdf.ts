@@ -46,6 +46,11 @@ type UnpdfExtractedImage = {
 type TextMarkedContent = { type: string; id: string };
 type NodeRenderableContext = NapiCanvasRenderingContext2D | SKRSContext2D;
 type PDFMetadataInfo = Record<string, unknown>;
+type PdfjsDocumentOptions = Pick<DocumentInitParameters, 'useWorkerFetch'> &
+  Partial<Pick<DocumentInitParameters, 'standardFontDataUrl' | 'wasmUrl'>>;
+type LoadPdfDocumentOptions = {
+  includeOptionalAssets?: boolean;
+};
 
 function readTextItem(item: TextItem | TextMarkedContent): string {
   return 'str' in item ? item.str : '';
@@ -93,10 +98,7 @@ export class UnpdfProvider extends BasePDFReader {
   private unpdfLoadPromise: Promise<UnpdfModule> | null = null;
   private configuredPdfjsWorkerSrc: string | null = null;
   private hasConfiguredUnpdfPdfjsModule = false;
-  private pdfjsDocumentOptions: Pick<
-    DocumentInitParameters,
-    'standardFontDataUrl' | 'useWorkerFetch' | 'wasmUrl'
-  > | null = null;
+  private pdfjsRenderDocumentOptions: PdfjsDocumentOptions | null = null;
 
   private rgbaToRgbBuffer(data: Uint8ClampedArray): Buffer {
     const rgbData = Buffer.alloc((data.length / 4) * 3);
@@ -149,8 +151,6 @@ export class UnpdfProvider extends BasePDFReader {
       );
       this.hasConfiguredUnpdfPdfjsModule = true;
     }
-
-    await this.ensurePdfjsWorkerConfigured();
   }
 
   private formatPdfjsAssetDirectory(path: string): string {
@@ -158,26 +158,45 @@ export class UnpdfProvider extends BasePDFReader {
     return normalized.endsWith('/') ? normalized : `${normalized}/`;
   }
 
-  private getPdfjsDocumentOptions(): Pick<
-    DocumentInitParameters,
-    'standardFontDataUrl' | 'useWorkerFetch' | 'wasmUrl'
-  > {
-    if (!this.pdfjsDocumentOptions) {
-      const standardFontDataUrl = this.formatPdfjsAssetDirectory(
-        dirname(require.resolve('pdfjs-dist/standard_fonts/FoxitSymbol.pfb')),
+  private resolveOptionalPdfjsAssetDirectory(
+    specifier: string,
+  ): string | undefined {
+    try {
+      return this.formatPdfjsAssetDirectory(
+        dirname(require.resolve(specifier)),
       );
-      const wasmUrl = this.formatPdfjsAssetDirectory(
-        dirname(require.resolve('pdfjs-dist/wasm/openjpeg.wasm')),
-      );
+    } catch {
+      return undefined;
+    }
+  }
 
-      this.pdfjsDocumentOptions = {
-        standardFontDataUrl,
+  private getPdfjsDocumentOptions(
+    includeOptionalAssets = false,
+  ): PdfjsDocumentOptions {
+    if (!includeOptionalAssets) {
+      return {
         useWorkerFetch: false,
-        wasmUrl,
       };
     }
 
-    return this.pdfjsDocumentOptions;
+    if (!this.pdfjsRenderDocumentOptions) {
+      // These assets are optional package extras in some deployments, so keep
+      // text/metadata flows working even when bundlers trim rendering assets.
+      const standardFontDataUrl = this.resolveOptionalPdfjsAssetDirectory(
+        'pdfjs-dist/standard_fonts/FoxitSymbol.pfb',
+      );
+      const wasmUrl = this.resolveOptionalPdfjsAssetDirectory(
+        'pdfjs-dist/wasm/openjpeg.wasm',
+      );
+
+      this.pdfjsRenderDocumentOptions = {
+        useWorkerFetch: false,
+        ...(standardFontDataUrl ? { standardFontDataUrl } : {}),
+        ...(wasmUrl ? { wasmUrl } : {}),
+      };
+    }
+
+    return this.pdfjsRenderDocumentOptions;
   }
 
   private async ensurePdfjsWorkerConfigured() {
@@ -406,7 +425,12 @@ export class UnpdfProvider extends BasePDFReader {
   private async loadPDFDocument(
     unpdf: UnpdfModule,
     source: PDFSource,
+    options?: LoadPdfDocumentOptions,
   ): Promise<UnpdfDocumentProxy> {
+    if (options?.includeOptionalAssets) {
+      await this.ensurePdfjsWorkerConfigured();
+    }
+
     const buffer = await this.normalizeSource(source);
 
     if (!this.validatePDFData(buffer)) {
@@ -416,7 +440,10 @@ export class UnpdfProvider extends BasePDFReader {
     // Clone in-memory sources so PDF.js worker transfer does not detach caller-owned buffers.
     const documentData =
       typeof source === 'string' ? buffer : new Uint8Array(buffer);
-    return unpdf.getDocumentProxy(documentData, this.getPdfjsDocumentOptions());
+    return unpdf.getDocumentProxy(
+      documentData,
+      this.getPdfjsDocumentOptions(options?.includeOptionalAssets),
+    );
   }
 
   private async closePDFDocument(pdf: UnpdfDocumentProxy): Promise<void> {
@@ -444,6 +471,24 @@ export class UnpdfProvider extends BasePDFReader {
     } finally {
       await this.closePDFDocument(pdf);
     }
+  }
+
+  private async getSourceFileSize(
+    source: PDFSource,
+  ): Promise<number | undefined> {
+    if (typeof source === 'string') {
+      try {
+        return (await fs.stat(source)).size;
+      } catch {
+        return undefined;
+      }
+    }
+
+    if (source instanceof ArrayBuffer || source instanceof Uint8Array) {
+      return source.byteLength;
+    }
+
+    return undefined;
   }
 
   private convertExtractedImage(
@@ -496,7 +541,9 @@ export class UnpdfProvider extends BasePDFReader {
     source: PDFSource,
     pages: number[],
   ): Promise<PDFImage[]> {
-    const pdf = await this.loadPDFDocument(unpdf, source);
+    const pdf = await this.loadPDFDocument(unpdf, source, {
+      includeOptionalAssets: true,
+    });
     const batchImages: PDFImage[] = [];
 
     try {
@@ -613,6 +660,7 @@ export class UnpdfProvider extends BasePDFReader {
 
       const document = await pdfjs.getDocument({
         data: buffer,
+        ...this.getPdfjsDocumentOptions(true),
       }).promise;
 
       try {
@@ -725,13 +773,8 @@ export class UnpdfProvider extends BasePDFReader {
   async getInfo(source: PDFSource): Promise<PDFInfo> {
     try {
       const unpdf = await this.loadUnpdf();
-      const buffer = await this.normalizeSource(source);
-
-      if (!this.validatePDFData(buffer)) {
-        throw new Error('Invalid PDF data');
-      }
-
-      const pdf = await this.loadPDFDocument(unpdf, buffer);
+      const pdf = await this.loadPDFDocument(unpdf, source);
+      const fileSize = await this.getSourceFileSize(source);
 
       try {
         const metadata = await pdf.getMetadata();
@@ -819,7 +862,7 @@ export class UnpdfProvider extends BasePDFReader {
 
         return {
           pageCount,
-          fileSize: buffer.length,
+          fileSize,
           version: getMetadataInfoValue(metadata?.info, 'PDFFormatVersion'),
           encrypted:
             getMetadataInfoValue(metadata?.info, 'Encrypted') === 'Yes',
