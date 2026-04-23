@@ -1,6 +1,6 @@
 {
   "name": "@happyvertical/pdf",
-  "version": "0.62.25",
+  "version": "0.62.26",
   "description": "Modern PDF processing utilities with text extraction and OCR support using unpdf and @happyvertical/ocr",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,11 @@
       "pdfjs-dist": "5.4.296"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "access": "public"
