@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.27
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - node unpdf asset loading for image extraction (#68) (pdf)
+
 ## 0.62.26
 
 ### Patch Changes
