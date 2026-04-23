@@ -18,6 +18,7 @@ import type {
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
+  ExtractImagesOptions,
   ExtractTextOptions,
   PDFCapabilities,
   PDFImage,
@@ -26,12 +27,20 @@ import type {
   PDFSource,
   RenderPagesOptions,
 } from '../shared/types';
-import { PDFDependencyError } from '../shared/types';
+import { PDFBatchExtractionError, PDFDependencyError } from '../shared/types';
 import { formatPdfOcrRuntimeIssue } from './ocr-runtime';
 
 const require = createRequire(import.meta.url);
+const IMAGE_EXTRACTION_BATCH_SIZE = 4;
 
 type UnpdfModule = typeof import('unpdf');
+type UnpdfDocumentProxy = Awaited<ReturnType<UnpdfModule['getDocumentProxy']>>;
+type UnpdfExtractedImage = {
+  data: Buffer | Uint8Array | Uint8ClampedArray | ArrayBuffer;
+  width?: number;
+  height?: number;
+  channels?: number;
+};
 type TextMarkedContent = { type: string; id: string };
 type NodeRenderableContext = NapiCanvasRenderingContext2D | SKRSContext2D;
 type PDFMetadataInfo = Record<string, unknown>;
@@ -186,6 +195,7 @@ export class UnpdfProvider extends BasePDFReader {
       (typeof source === 'object' &&
         Object.keys(source).length === 0 &&
         !(source instanceof Buffer) &&
+        !(source instanceof ArrayBuffer) &&
         !(source instanceof Uint8Array))
     ) {
       return null;
@@ -295,84 +305,209 @@ export class UnpdfProvider extends BasePDFReader {
     return rgbData;
   }
 
-  /**
-   * Extract images from a PDF using unpdf
-   */
-  async extractImages(source: PDFSource): Promise<PDFImage[]> {
-    // Handle invalid inputs gracefully
-    if (
+  private isInvalidSource(source: PDFSource): boolean {
+    return (
       !source ||
       (typeof source === 'string' && source.trim() === '') ||
       (typeof source === 'object' &&
         Object.keys(source).length === 0 &&
         !(source instanceof Buffer) &&
+        !(source instanceof ArrayBuffer) &&
         !(source instanceof Uint8Array))
-    ) {
-      return [];
+    );
+  }
+
+  private normalizeImageBatchSize(batchSize?: number): number {
+    if (!batchSize || !Number.isFinite(batchSize) || batchSize < 1) {
+      return IMAGE_EXTRACTION_BATCH_SIZE;
+    }
+
+    return Math.floor(batchSize);
+  }
+
+  private chunkPages(pages: number[], batchSize: number): number[][] {
+    const batches: number[][] = [];
+
+    for (let index = 0; index < pages.length; index += batchSize) {
+      batches.push(pages.slice(index, index + batchSize));
+    }
+
+    return batches;
+  }
+
+  private async loadPDFDocument(
+    unpdf: UnpdfModule,
+    source: PDFSource,
+  ): Promise<UnpdfDocumentProxy> {
+    const buffer = await this.normalizeSource(source);
+
+    if (!this.validatePDFData(buffer)) {
+      throw new Error('Invalid PDF data');
+    }
+
+    // Clone in-memory sources so PDF.js worker transfer does not detach caller-owned buffers.
+    const documentData =
+      typeof source === 'string' ? buffer : new Uint8Array(buffer);
+    return unpdf.getDocumentProxy(documentData);
+  }
+
+  private async closePDFDocument(pdf: UnpdfDocumentProxy): Promise<void> {
+    try {
+      await pdf.cleanup?.();
+    } catch {
+      // Best-effort cleanup; destroy below is the important release path.
     }
 
     try {
-      const unpdf = await this.loadUnpdf();
-      const buffer = await this.normalizeSource(source);
+      await pdf.destroy?.();
+    } catch {
+      // Ignore cleanup failures so extraction errors remain the caller-visible failure.
+    }
+  }
 
-      if (!this.validatePDFData(buffer)) {
-        throw new Error('Invalid PDF data');
+  private async getPageCount(
+    unpdf: UnpdfModule,
+    source: PDFSource,
+  ): Promise<number> {
+    const pdf = await this.loadPDFDocument(unpdf, source);
+
+    try {
+      return pdf.numPages;
+    } finally {
+      await this.closePDFDocument(pdf);
+    }
+  }
+
+  private convertExtractedImage(
+    image: UnpdfExtractedImage,
+    pageNumber: number,
+  ): PDFImage {
+    const rawData = this.convertImageDataToBuffer(image.data);
+
+    // Direct RGB data processing - optimal path for OCR
+    let processedData: Buffer = rawData;
+    let format = 'unknown';
+
+    // If we have raw RGB data (3 channels), keep it as raw RGB
+    if (image.channels === 3 && image.width && image.height) {
+      const expectedSize = image.width * image.height * 3;
+      if (rawData.length === expectedSize) {
+        processedData = this.processRawRGBData(
+          rawData,
+          image.width,
+          image.height,
+        );
+        format = 'rgb'; // Mark as raw RGB for OCR to recognize optimal path
       }
+    }
 
-      const pdf = await unpdf.getDocumentProxy(buffer);
-      const allImages: PDFImage[] = [];
+    return {
+      data: processedData,
+      width: image.width,
+      height: image.height,
+      channels: image.channels,
+      format,
+      pageNumber,
+    };
+  }
 
-      // Extract from all pages
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+  private convertImageDataToBuffer(data: UnpdfExtractedImage['data']): Buffer {
+    if (data instanceof Buffer) {
+      return data;
+    }
+
+    if (data instanceof ArrayBuffer) {
+      return Buffer.from(data);
+    }
+
+    return Buffer.from(data);
+  }
+
+  private async extractImageBatch(
+    unpdf: UnpdfModule,
+    source: PDFSource,
+    pages: number[],
+  ): Promise<PDFImage[]> {
+    const pdf = await this.loadPDFDocument(unpdf, source);
+    const batchImages: PDFImage[] = [];
+
+    try {
+      for (const pageNum of pages) {
         try {
           const images = await unpdf.extractImages(pdf, pageNum);
 
-          // Convert unpdf image format to our PDFImage format with BMP conversion
           for (const image of images) {
-            const rawData: Buffer =
-              image.data instanceof Buffer
-                ? image.data
-                : Buffer.from(image.data);
-
-            // Direct RGB data processing - optimal path for OCR
-            let processedData: Buffer = rawData;
-            let format = 'unknown';
-
-            // If we have raw RGB data (3 channels), keep it as raw RGB
-            if (image.channels === 3 && image.width && image.height) {
-              const expectedSize = image.width * image.height * 3;
-              if (rawData.length === expectedSize) {
-                processedData = this.processRawRGBData(
-                  rawData,
-                  image.width,
-                  image.height,
-                );
-                format = 'rgb'; // Mark as raw RGB for OCR to recognize optimal path
-              }
-            }
-
-            allImages.push({
-              data: processedData,
-              width: image.width,
-              height: image.height,
-              channels: image.channels,
-              format: format,
-              pageNumber: pageNum,
-            });
+            batchImages.push(
+              this.convertExtractedImage(image as UnpdfExtractedImage, pageNum),
+            );
           }
         } catch (pageError) {
-          console.warn(
-            `Failed to extract images from page ${pageNum}:`,
-            pageError,
-          );
+          const message =
+            pageError instanceof Error ? pageError.message : String(pageError);
+          throw new PDFBatchExtractionError([pageNum], message);
         }
       }
 
-      return allImages;
-    } catch (error) {
-      console.error('unpdf image extraction failed:', error);
+      return batchImages;
+    } finally {
+      await this.closePDFDocument(pdf);
+    }
+  }
+
+  /**
+   * Extract images from a PDF using unpdf
+   */
+  async extractImages(
+    source: PDFSource,
+    options?: ExtractImagesOptions,
+  ): Promise<PDFImage[]> {
+    // Handle invalid inputs gracefully
+    if (this.isInvalidSource(source)) {
       return [];
     }
+
+    const unpdf = await this.loadUnpdf();
+    const totalPages = await this.getPageCount(unpdf, source);
+    const pagesToExtract = this.normalizePages(options?.pages, totalPages);
+
+    if (pagesToExtract.length === 0) {
+      return [];
+    }
+
+    const batches = this.chunkPages(
+      pagesToExtract,
+      this.normalizeImageBatchSize(options?.batchSize),
+    );
+    const shouldCollect = options?.collect ?? !options?.onBatch;
+    const allImages: PDFImage[] = [];
+
+    for (const [batchIndex, pages] of batches.entries()) {
+      try {
+        const images = await this.extractImageBatch(unpdf, source, pages);
+
+        await options?.onBatch?.({
+          images,
+          pages,
+          batchIndex,
+          totalBatches: batches.length,
+        });
+
+        if (shouldCollect) {
+          for (const image of images) {
+            allImages.push(image);
+          }
+        }
+      } catch (error) {
+        if (error instanceof PDFBatchExtractionError) {
+          throw error;
+        }
+
+        const message = error instanceof Error ? error.message : String(error);
+        throw new PDFBatchExtractionError(pages, message);
+      }
+    }
+
+    return allImages;
   }
 
   /**

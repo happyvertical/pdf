@@ -505,4 +505,146 @@ describe('UnpdfProvider', () => {
       },
     });
   });
+
+  it('streams image batches without retaining previous batch images', async () => {
+    const reader = new UnpdfProvider() as any;
+    const documents: Array<{
+      cleanup: ReturnType<typeof vi.fn>;
+      destroy: ReturnType<typeof vi.fn>;
+    }> = [];
+    const getDocumentProxy = vi.fn().mockImplementation(async () => {
+      const document = {
+        numPages: 5,
+        cleanup: vi.fn(),
+        destroy: vi.fn(),
+      };
+      documents.push(document);
+      return document;
+    });
+
+    reader.loadUnpdf = vi.fn().mockResolvedValue({
+      getDocumentProxy,
+      extractImages: vi.fn().mockImplementation(async (_pdf, pageNumber) => [
+        {
+          data: Buffer.alloc(1024 * 1024, pageNumber),
+          width: 1,
+          height: 1024 * 1024,
+          channels: 1,
+        },
+      ]),
+    });
+    reader.normalizeSource = vi
+      .fn()
+      .mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]));
+    reader.validatePDFData = vi.fn().mockReturnValue(true);
+
+    const seenBatches: number[][] = [];
+    const result = await reader.extractImages('/tmp/large.pdf', {
+      batchSize: 2,
+      onBatch: async ({ images, pages, batchIndex, totalBatches }) => {
+        seenBatches.push(pages);
+        expect(images.map((image) => image.pageNumber)).toEqual(pages);
+        expect(batchIndex).toBe(seenBatches.length - 1);
+        expect(totalBatches).toBe(3);
+      },
+    });
+
+    expect(result).toEqual([]);
+    expect(seenBatches).toEqual([[1, 2], [3, 4], [5]]);
+    expect(getDocumentProxy).toHaveBeenCalledTimes(4);
+    for (const document of documents) {
+      expect(document.cleanup).toHaveBeenCalledOnce();
+      expect(document.destroy).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('preserves page and image order across collected image batches', async () => {
+    const reader = new UnpdfProvider() as any;
+
+    reader.loadUnpdf = vi.fn().mockResolvedValue({
+      getDocumentProxy: vi.fn().mockResolvedValue({
+        numPages: 5,
+        cleanup: vi.fn(),
+        destroy: vi.fn(),
+      }),
+      extractImages: vi
+        .fn()
+        .mockImplementation(async (_pdf, pageNumber: number) => [
+          {
+            data: Buffer.from([pageNumber, 1]),
+            width: 1,
+            height: 2,
+            channels: 1,
+          },
+          {
+            data: Buffer.from([pageNumber, 2]),
+            width: 1,
+            height: 2,
+            channels: 1,
+          },
+        ]),
+    });
+    reader.normalizeSource = vi
+      .fn()
+      .mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]));
+    reader.validatePDFData = vi.fn().mockReturnValue(true);
+
+    const images = await reader.extractImages('/tmp/document.pdf', {
+      pages: [2, 4, 5],
+      batchSize: 2,
+    });
+
+    expect(images.map((image) => image.pageNumber)).toEqual([2, 2, 4, 4, 5, 5]);
+    expect(images.map((image) => [...image.data])).toEqual([
+      [2, 1],
+      [2, 2],
+      [4, 1],
+      [4, 2],
+      [5, 1],
+      [5, 2],
+    ]);
+  });
+
+  it('rejects explicit page decode failures during image batching', async () => {
+    const reader = new UnpdfProvider() as any;
+
+    reader.loadUnpdf = vi.fn().mockResolvedValue({
+      getDocumentProxy: vi.fn().mockResolvedValue({
+        numPages: 4,
+        cleanup: vi.fn(),
+        destroy: vi.fn(),
+      }),
+      extractImages: vi
+        .fn()
+        .mockImplementation(async (_pdf, pageNumber: number) => {
+          if (pageNumber === 3) {
+            throw new Error('decode failed');
+          }
+
+          return [
+            {
+              data: Buffer.from([pageNumber]),
+              width: 1,
+              height: 1,
+              channels: 1,
+            },
+          ];
+        }),
+    });
+    reader.normalizeSource = vi
+      .fn()
+      .mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]));
+    reader.validatePDFData = vi.fn().mockReturnValue(true);
+
+    const extractionPromise = reader.extractImages('/tmp/broken.pdf', {
+      batchSize: 2,
+    });
+
+    await expect(extractionPromise).rejects.toBeInstanceOf(
+      PDFBatchExtractionError,
+    );
+    await expect(extractionPromise).rejects.toThrow(
+      'Large PDF extraction failed for pages 3: decode failed',
+    );
+  });
 });

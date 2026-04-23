@@ -114,6 +114,44 @@ export interface PDFImage extends BaseOCRImage {
   pageNumber?: number;
 }
 
+/**
+ * A page-bounded image extraction batch delivered to streaming callers
+ */
+export interface PDFImageBatch {
+  /** Images extracted from this batch, in page/image order */
+  images: PDFImage[];
+  /** Page numbers included in this batch (1-based) */
+  pages: number[];
+  /** Zero-based batch index */
+  batchIndex: number;
+  /** Total number of batches for this extraction request */
+  totalBatches: number;
+}
+
+/**
+ * Configuration options for extracting embedded images from PDF documents
+ */
+export interface ExtractImagesOptions {
+  /** Specific pages to extract (1-based indexing). If not provided, extracts all pages */
+  pages?: number[];
+  /** Number of pages to process per provider batch. Defaults to a small bounded batch size */
+  batchSize?: number;
+  /**
+   * Whether to accumulate extracted images into the returned array.
+   *
+   * Defaults to true for ordinary extractImages() calls, and false when onBatch is
+   * provided so streaming callers do not retain previous image buffers.
+   */
+  collect?: boolean;
+  /**
+   * Receives each completed page batch before the next batch starts.
+   *
+   * Use this to persist or OCR images incrementally without keeping the whole
+   * document's image bytes in memory.
+   */
+  onBatch?: (batch: PDFImageBatch) => void | Promise<void>;
+}
+
 // Re-export OCR result type from the OCR package for backward compatibility
 export type { OCRResult } from '@happyvertical/ocr';
 
@@ -302,10 +340,11 @@ export interface PDFReader {
    * Extract all images from a PDF document for further processing or OCR
    *
    * Retrieves image data in a format suitable for OCR processing or display.
-   * Images include page number information for context. Returns empty array
-   * if no images are found or extraction fails.
+   * Images include page number information for context. Returns an empty array
+   * if no images are found.
    *
    * @param source - PDF source: file path (Node.js only), ArrayBuffer, or Uint8Array
+   * @param options - Image extraction configuration options
    * @returns Promise resolving to array of extracted PDFImage objects with raw data
    *
    * @throws {PDFUnsupportedError} When provider doesn't support image extraction
@@ -330,7 +369,10 @@ export interface PDFReader {
    * }
    * ```
    */
-  extractImages(source: string | ArrayBuffer | Uint8Array): Promise<PDFImage[]>;
+  extractImages(
+    source: string | ArrayBuffer | Uint8Array,
+    options?: ExtractImagesOptions,
+  ): Promise<PDFImage[]>;
 
   /**
    * Render PDF pages as rasterized images for OCR processing

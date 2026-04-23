@@ -93,6 +93,16 @@ console.log(`Created: ${metadata.creationDate}`);
 // Extract images for OCR or display
 const images = await reader.extractImages('/path/to/document.pdf');
 console.log(`Found ${images.length} images`);
+
+// Process large PDFs without retaining every image buffer
+await reader.extractImages('/path/to/large-document.pdf', {
+  batchSize: 4,
+  collect: false,
+  onBatch: async ({ images, pages }) => {
+    console.log(`Storing ${images.length} images from pages ${pages.join(', ')}`);
+    // Persist or OCR this batch here.
+  }
+});
 ```
 
 ### OCR Processing
