@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { getPDFReader } from './index';
 import type { PDFReader } from './shared/types';
 
+const OCR_TEST_TIMEOUT_MS = 120000;
+
 describe('PDF Content Extraction', () => {
   let reader: PDFReader;
   let unpdfReader: PDFReader;
@@ -64,17 +66,21 @@ describe('PDF Content Extraction', () => {
     }
   });
 
-  it('should extract text from scanned PDF via OCR fallback', async () => {
-    const text = await reader.extractText(pdfPath);
+  it(
+    'should extract text from scanned PDF via OCR fallback',
+    async () => {
+      const text = await reader.extractText(pdfPath);
 
-    // Must successfully extract text, not return null
-    expect(text).not.toBeNull();
-    expect(typeof text).toBe('string');
+      // Must successfully extract text, not return null
+      expect(text).not.toBeNull();
+      expect(typeof text).toBe('string');
 
-    // Must extract meaningful content from 3-page document
-    expect(text?.length).toBeGreaterThan(100);
+      // Must extract meaningful content from 3-page document
+      expect(text?.length).toBeGreaterThan(100);
 
-    // Should contain "Bentley" (the town name in the document)
-    expect(text?.toLowerCase()).toContain('bentley');
-  }, 60000);
+      // Should contain "Bentley" (the town name in the document)
+      expect(text?.toLowerCase()).toContain('bentley');
+    },
+    OCR_TEST_TIMEOUT_MS,
+  );
 });

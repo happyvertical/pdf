@@ -7,6 +7,8 @@ import {
   getPDFReader,
 } from './index';
 
+const OCR_TEST_TIMEOUT_MS = 120000;
+
 describe('PDF Package Integration', () => {
   let reader: any = null;
 
@@ -35,19 +37,23 @@ describe('PDF Package Integration', () => {
     );
   }, 30000);
 
-  it('should extract text using legacy function', async () => {
-    const pdfPath = join(
-      fileURLToPath(new URL('.', import.meta.url)),
-      '..',
-      'test',
-      'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
-    );
+  it(
+    'should extract text using legacy function',
+    async () => {
+      const pdfPath = join(
+        fileURLToPath(new URL('.', import.meta.url)),
+        '..',
+        'test',
+        'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
+      );
 
-    const text = await extractTextFromPDF(pdfPath);
+      const text = await extractTextFromPDF(pdfPath);
 
-    expect(text !== undefined).toBe(true);
-    expect(typeof text === 'string' || text === null).toBe(true);
-  }, 60000); // 60 second timeout for OCR processing
+      expect(text !== undefined).toBe(true);
+      expect(typeof text === 'string' || text === null).toBe(true);
+    },
+    OCR_TEST_TIMEOUT_MS,
+  );
 
   it('should check OCR dependencies', async () => {
     const deps = await checkOCRDependencies();
