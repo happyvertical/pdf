@@ -558,6 +558,14 @@ describe('UnpdfProvider', () => {
     }
   });
 
+  it('returns an empty list for zero-length byte sources', async () => {
+    const reader = new UnpdfProvider() as any;
+    reader.loadUnpdf = vi.fn();
+
+    await expect(reader.extractImages(new Uint8Array())).resolves.toEqual([]);
+    expect(reader.loadUnpdf).not.toHaveBeenCalled();
+  });
+
   it('preserves page and image order across collected image batches', async () => {
     const reader = new UnpdfProvider() as any;
 
@@ -646,5 +654,40 @@ describe('UnpdfProvider', () => {
     await expect(extractionPromise).rejects.toThrow(
       'Large PDF extraction failed for pages 3: decode failed',
     );
+  });
+
+  it('preserves caller onBatch failures without remapping them', async () => {
+    const reader = new UnpdfProvider() as any;
+
+    reader.loadUnpdf = vi.fn().mockResolvedValue({
+      getDocumentProxy: vi.fn().mockResolvedValue({
+        numPages: 2,
+        cleanup: vi.fn(),
+        destroy: vi.fn(),
+      }),
+      extractImages: vi.fn().mockResolvedValue([
+        {
+          data: Buffer.from([1]),
+          width: 1,
+          height: 1,
+          channels: 1,
+        },
+      ]),
+    });
+    reader.normalizeSource = vi
+      .fn()
+      .mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]));
+    reader.validatePDFData = vi.fn().mockReturnValue(true);
+
+    const batchError = new Error('storage write failed');
+
+    await expect(
+      reader.extractImages('/tmp/document.pdf', {
+        batchSize: 1,
+        onBatch: async () => {
+          throw batchError;
+        },
+      }),
+    ).rejects.toBe(batchError);
   });
 });

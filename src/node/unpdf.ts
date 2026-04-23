@@ -306,15 +306,19 @@ export class UnpdfProvider extends BasePDFReader {
   }
 
   private isInvalidSource(source: PDFSource): boolean {
-    return (
-      !source ||
-      (typeof source === 'string' && source.trim() === '') ||
-      (typeof source === 'object' &&
-        Object.keys(source).length === 0 &&
-        !(source instanceof Buffer) &&
-        !(source instanceof ArrayBuffer) &&
-        !(source instanceof Uint8Array))
-    );
+    if (!source) {
+      return true;
+    }
+
+    if (typeof source === 'string') {
+      return source.trim() === '';
+    }
+
+    if (source instanceof Uint8Array || source instanceof ArrayBuffer) {
+      return source.byteLength === 0;
+    }
+
+    return typeof source === 'object' && Object.keys(source).length === 0;
   }
 
   private normalizeImageBatchSize(batchSize?: number): number {
@@ -482,21 +486,10 @@ export class UnpdfProvider extends BasePDFReader {
     const allImages: PDFImage[] = [];
 
     for (const [batchIndex, pages] of batches.entries()) {
+      let images: PDFImage[];
+
       try {
-        const images = await this.extractImageBatch(unpdf, source, pages);
-
-        await options?.onBatch?.({
-          images,
-          pages,
-          batchIndex,
-          totalBatches: batches.length,
-        });
-
-        if (shouldCollect) {
-          for (const image of images) {
-            allImages.push(image);
-          }
-        }
+        images = await this.extractImageBatch(unpdf, source, pages);
       } catch (error) {
         if (error instanceof PDFBatchExtractionError) {
           throw error;
@@ -504,6 +497,19 @@ export class UnpdfProvider extends BasePDFReader {
 
         const message = error instanceof Error ? error.message : String(error);
         throw new PDFBatchExtractionError(pages, message);
+      }
+
+      await options?.onBatch?.({
+        images,
+        pages,
+        batchIndex,
+        totalBatches: batches.length,
+      });
+
+      if (shouldCollect) {
+        for (const image of images) {
+          allImages.push(image);
+        }
       }
     }
 
