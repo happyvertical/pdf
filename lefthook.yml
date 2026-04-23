@@ -10,17 +10,19 @@ pre-commit:
       stage_fixed: true
 
 # Commit-msg hook: Validate commit message format
-# Skipped in CI to allow semantic-release commits
 commit-msg:
   commands:
     validate:
-      skip:
-        - run: "[ \"$CI\" = \"true\" ]"
-      run: npx --no-install commitlint --edit {1}
+      run: bash scripts/validate-conventional-commits.sh edit {1}
 
 # Pre-push hook: Run checks before pushing
 pre-push:
   commands:
+    conventional-commits:
+      run: bash scripts/validate-conventional-commits.sh upstream
+      skip:
+        - merge
+        - rebase
     typecheck:
       run: pnpm typecheck
       skip:

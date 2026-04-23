@@ -3,6 +3,7 @@ name: Pull Request Validation
 on:
   pull_request:
     branches: [main]
+    types: [opened, reopened, synchronize, edited]
 
 # Cancel in-progress runs when new commits are pushed
 concurrency:
@@ -11,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
   pull-requests: write
 
 jobs:
@@ -24,27 +26,63 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate commit messages
-        uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          configFile: commitlint.config.js
+          node-version: '24'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate branch commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bash scripts/validate-conventional-commits.sh range "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          bash scripts/validate-conventional-commits.sh title "$PR_TITLE"
 
       - name: Determine version bump
         id: version
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          commits=$(git log origin/main..HEAD --no-merges --pretty=format:"%s")
+          bump="none"
 
-          bump="patch"
-          if echo "$commits" | grep -qE "^feat(\(.+\))?!?:"; then
+          if printf '%s\n' "$PR_TITLE" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then
             bump="minor"
           fi
 
-          if echo "$commits" | grep -qiE "(BREAKING CHANGE|!:)"; then
-            bump="minor"  # Treat as minor until 1.0.0
+          if [ "$bump" = "none" ] && printf '%s\n' "$PR_TITLE" | grep -qE '^(feat|fix|perf)(\([^)]+\))?:|^chore\(deps\):'; then
+            bump="patch"
           fi
 
           echo "bump=$bump" >> $GITHUB_OUTPUT
-          echo "Will perform $bump version bump on merge"
+          echo "PR title will perform a $bump version bump on squash merge"
 
       - name: Comment on PR
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
@@ -52,19 +90,27 @@ jobs:
           script: |
             const bump = '${{ steps.version.outputs.bump }}';
 
-            const comment = `## Version Bump Preview
+            const comment = bump === 'none'
+              ? `## Release Preview
 
-            When this PR is merged, @happyvertical/pdf will receive a **${bump}** version bump based on your conventional commits.
+            This PR title will **not** trigger an automatic release on squash merge.
+
+            Use a releaseable conventional PR title like \`fix(pdf): ...\`, \`feat(pdf): ...\`, or \`chore(deps): ...\` if this change should publish automatically.
+
+            Otherwise, add a manual changeset or apply the \`skip-changeset\` label if no release is needed.`
+              : `## Release Preview
+
+            When this PR is squash-merged, @happyvertical/pdf will receive a **${bump}** version bump based on the PR title's conventional commit format.
 
             ### What happens on merge?
 
             1. Tests run on main branch
-            2. Package is built
+            2. The squash commit message is validated
             3. Version is bumped automatically
             4. Package is published to GitHub Packages
             5. Git tag is created
 
-            No manual intervention needed!`;
+            No manual intervention needed.`;
 
             // Check if we already commented
             const { data: comments } = await github.rest.issues.listComments({
@@ -75,7 +121,7 @@ jobs:
 
             const existingComment = comments.find(c =>
               c.user.login === 'github-actions[bot]' &&
-              c.body.includes('Version Bump Preview')
+              c.body.includes('Release Preview')
             );
 
             if (existingComment) {
@@ -96,4 +142,5 @@ jobs:
 
   test:
     name: Validate Changes
+    if: github.event.action != 'edited'
     uses: ./.github/workflows/test.yml
