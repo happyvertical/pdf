@@ -6,6 +6,7 @@ import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
+  ExtractImagesOptions,
   ExtractTextOptions,
   PDFCapabilities,
   PDFImage,
@@ -185,7 +186,10 @@ export class PDFJSProvider extends BasePDFReader {
    * Extract images from a PDF using PDF.js
    * Note: PDF.js has limited image extraction capabilities compared to unpdf
    */
-  async extractImages(source: PDFSource): Promise<PDFImage[]> {
+  async extractImages(
+    source: PDFSource,
+    options?: ExtractImagesOptions,
+  ): Promise<PDFImage[]> {
     try {
       const pdfjs = await this.loadPDFJS();
       const typedArray = await this.normalizeSource(source);
@@ -197,8 +201,9 @@ export class PDFJSProvider extends BasePDFReader {
       const pdf = await pdfjs.getDocument({ data: typedArray }).promise;
       const allImages: PDFImage[] = [];
 
-      // Extract from all pages
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const pagesToExtract = this.normalizePages(options?.pages, pdf.numPages);
+
+      for (const pageNum of pagesToExtract) {
         try {
           const page = await pdf.getPage(pageNum);
           await page.getOperatorList();

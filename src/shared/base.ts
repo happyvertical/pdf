@@ -4,6 +4,7 @@
 
 import type {
   DependencyCheckResult,
+  ExtractImagesOptions,
   ExtractTextOptions,
   OCROptions,
   OCRResult,
@@ -88,7 +89,10 @@ export abstract class BasePDFReader implements PDFReader {
    * @returns Promise resolving to array of extracted image objects
    * @throws {PDFUnsupportedError} When provider doesn't support image extraction
    */
-  async extractImages(_source: PDFSource): Promise<PDFImage[]> {
+  async extractImages(
+    _source: PDFSource,
+    _options?: ExtractImagesOptions,
+  ): Promise<PDFImage[]> {
     throw new PDFUnsupportedError(`extractImages (provider: ${this.name})`);
   }
 

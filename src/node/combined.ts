@@ -7,6 +7,7 @@ import { getOCR } from '@happyvertical/ocr';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
+  ExtractImagesOptions,
   ExtractTextOptions,
   OCROptions,
   OCRResult,
@@ -431,8 +432,18 @@ export class CombinedNodeProvider extends BasePDFReader {
   /**
    * Extract images from a PDF using unpdf
    */
-  async extractImages(source: PDFSource): Promise<PDFImage[]> {
-    return this.unpdfProvider.extractImages(source);
+  async extractImages(
+    source: PDFSource,
+    options?: ExtractImagesOptions,
+  ): Promise<PDFImage[]> {
+    if (this.isInvalidSource(source)) {
+      return [];
+    }
+
+    const sourceByteLength = await this.getSourceByteLength(source);
+    await this.assertWithinConfiguredMaxFileSize(source, sourceByteLength);
+
+    return this.unpdfProvider.extractImages(source, options);
   }
 
   /**

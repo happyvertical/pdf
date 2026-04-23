@@ -6,6 +6,7 @@ import { getOCR } from '@happyvertical/ocr';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
+  ExtractImagesOptions,
   ExtractTextOptions,
   OCROptions,
   OCRResult,
@@ -78,8 +79,11 @@ export class CombinedBrowserProvider extends BasePDFReader {
   /**
    * Extract images from a PDF using PDF.js
    */
-  async extractImages(source: PDFSource): Promise<PDFImage[]> {
-    return this.pdfjsProvider.extractImages(source);
+  async extractImages(
+    source: PDFSource,
+    options?: ExtractImagesOptions,
+  ): Promise<PDFImage[]> {
+    return this.pdfjsProvider.extractImages(source, options);
   }
 
   /**

@@ -9,6 +9,7 @@ import { promises as fs } from 'node:fs';
 import { BasePDFReader } from '../shared/base';
 import type {
   DependencyCheckResult,
+  ExtractImagesOptions,
   ExtractTextOptions,
   OCROptions,
   OCRResult,
@@ -323,7 +324,10 @@ export class KreuzbergProvider extends BasePDFReader {
    * Note: Kreuzberg focuses on text extraction with integrated OCR.
    * For standalone image extraction, use the unpdf provider.
    */
-  async extractImages(_source: PDFSource): Promise<PDFImage[]> {
+  async extractImages(
+    _source: PDFSource,
+    _options?: ExtractImagesOptions,
+  ): Promise<PDFImage[]> {
     // Kreuzberg doesn't expose image extraction separately
     // It handles OCR internally during text extraction
     throw new PDFUnsupportedError(
