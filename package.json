@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=24",
     "pnpm": ">=9"
@@ -54,7 +54,7 @@
   "dependencies": {
     "@happyvertical/ocr": "^0.60.33",
     "@happyvertical/utils": "^0.71.20",
-    "@napi-rs/canvas": "0.1.97",
+    "@napi-rs/canvas": "0.1.99",
     "pdfjs-dist": "5.4.296",
     "unpdf": "^1.4.0"
   },
