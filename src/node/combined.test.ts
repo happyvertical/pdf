@@ -488,6 +488,40 @@ describe('CombinedNodeProvider', () => {
 });
 
 describe('UnpdfProvider', () => {
+  it('configures unpdf to use the official pdfjs-dist legacy runtime', async () => {
+    const reader = new UnpdfProvider() as any;
+
+    reader.ensurePdfjsWorkerConfigured = vi.fn().mockResolvedValue(undefined);
+
+    const definePDFJSModule = vi
+      .fn()
+      .mockImplementation(async (resolver: () => Promise<unknown>) => {
+        const resolved = await resolver();
+        const expected = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+        expect(resolved).toBe(expected);
+      });
+
+    await reader.ensureUnpdfPdfjsRuntime({ definePDFJSModule });
+    await reader.ensureUnpdfPdfjsRuntime({ definePDFJSModule });
+
+    expect(definePDFJSModule).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves pdfjs asset directories as filesystem paths for Node', () => {
+    const reader = new UnpdfProvider() as any;
+
+    const options = reader.getPdfjsDocumentOptions();
+
+    expect(options).toMatchObject({
+      useWorkerFetch: false,
+      standardFontDataUrl: expect.stringMatching(/\/$/),
+      wasmUrl: expect.stringMatching(/\/$/),
+    });
+    expect(options.standardFontDataUrl).not.toMatch(/^file:\/\//);
+    expect(options.wasmUrl).not.toMatch(/^file:\/\//);
+  });
+
   it('should surface page rendering dependency failures', async () => {
     const reader = new UnpdfProvider() as any;
 
@@ -552,6 +586,15 @@ describe('UnpdfProvider', () => {
     expect(result).toEqual([]);
     expect(seenBatches).toEqual([[1, 2], [3, 4], [5]]);
     expect(getDocumentProxy).toHaveBeenCalledTimes(4);
+    for (const [, options] of getDocumentProxy.mock.calls) {
+      expect(options).toMatchObject({
+        useWorkerFetch: false,
+        standardFontDataUrl: expect.stringMatching(/\/$/),
+        wasmUrl: expect.stringMatching(/\/$/),
+      });
+      expect(options.standardFontDataUrl).not.toMatch(/^file:\/\//);
+      expect(options.wasmUrl).not.toMatch(/^file:\/\//);
+    }
     for (const document of documents) {
       expect(document.cleanup).toHaveBeenCalledOnce();
       expect(document.destroy).toHaveBeenCalledOnce();

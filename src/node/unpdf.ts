@@ -4,6 +4,7 @@
 
 import { promises as fs } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Canvas } from '@napi-rs/canvas';
 import type {
@@ -11,6 +12,7 @@ import type {
   SKRSContext2D,
 } from '@napi-rs/canvas';
 import type {
+  DocumentInitParameters,
   PDFPageProxy,
   RenderParameters,
   TextItem,
@@ -88,7 +90,13 @@ function getMetadataInfoDate(
 export class UnpdfProvider extends BasePDFReader {
   protected name = 'unpdf';
   private unpdf: UnpdfModule | null = null;
+  private unpdfLoadPromise: Promise<UnpdfModule> | null = null;
   private configuredPdfjsWorkerSrc: string | null = null;
+  private hasConfiguredUnpdfPdfjsModule = false;
+  private pdfjsDocumentOptions: Pick<
+    DocumentInitParameters,
+    'standardFontDataUrl' | 'useWorkerFetch' | 'wasmUrl'
+  > | null = null;
 
   private rgbaToRgbBuffer(data: Uint8ClampedArray): Buffer {
     const rgbData = Buffer.alloc((data.length / 4) * 3);
@@ -114,12 +122,62 @@ export class UnpdfProvider extends BasePDFReader {
       return this.unpdf;
     }
 
+    if (!this.unpdfLoadPromise) {
+      this.unpdfLoadPromise = (async () => {
+        const unpdf = await import('unpdf');
+        await this.ensureUnpdfPdfjsRuntime(unpdf);
+        this.unpdf = unpdf;
+        return unpdf;
+      })();
+    }
+
     try {
-      this.unpdf = await import('unpdf');
-      return this.unpdf;
+      return await this.unpdfLoadPromise;
     } catch (error) {
+      this.unpdfLoadPromise = null;
+      this.unpdf = null;
       throw new PDFDependencyError('unpdf', (error as Error).message);
     }
+  }
+
+  private async ensureUnpdfPdfjsRuntime(
+    unpdf: Pick<UnpdfModule, 'definePDFJSModule'>,
+  ) {
+    if (!this.hasConfiguredUnpdfPdfjsModule) {
+      await unpdf.definePDFJSModule(
+        () => import('pdfjs-dist/legacy/build/pdf.mjs'),
+      );
+      this.hasConfiguredUnpdfPdfjsModule = true;
+    }
+
+    await this.ensurePdfjsWorkerConfigured();
+  }
+
+  private formatPdfjsAssetDirectory(path: string): string {
+    const normalized = path.replaceAll('\\', '/');
+    return normalized.endsWith('/') ? normalized : `${normalized}/`;
+  }
+
+  private getPdfjsDocumentOptions(): Pick<
+    DocumentInitParameters,
+    'standardFontDataUrl' | 'useWorkerFetch' | 'wasmUrl'
+  > {
+    if (!this.pdfjsDocumentOptions) {
+      const standardFontDataUrl = this.formatPdfjsAssetDirectory(
+        dirname(require.resolve('pdfjs-dist/standard_fonts/FoxitSymbol.pfb')),
+      );
+      const wasmUrl = this.formatPdfjsAssetDirectory(
+        dirname(require.resolve('pdfjs-dist/wasm/openjpeg.wasm')),
+      );
+
+      this.pdfjsDocumentOptions = {
+        standardFontDataUrl,
+        useWorkerFetch: false,
+        wasmUrl,
+      };
+    }
+
+    return this.pdfjsDocumentOptions;
   }
 
   private async ensurePdfjsWorkerConfigured() {
@@ -203,47 +261,49 @@ export class UnpdfProvider extends BasePDFReader {
 
     try {
       const unpdf = await this.loadUnpdf();
-      const buffer = await this.normalizeSource(source);
+      const pdf = await this.loadPDFDocument(unpdf, source);
 
-      if (!this.validatePDFData(buffer)) {
-        throw new Error('Invalid PDF data');
-      }
+      try {
+        const totalPages = pdf.numPages;
 
-      const pdf = await unpdf.getDocumentProxy(buffer);
-      const totalPages = pdf.numPages;
+        // Normalize pages to extract
+        const pagesToExtract = this.normalizePages(options?.pages, totalPages);
 
-      // Normalize pages to extract
-      const pagesToExtract = this.normalizePages(options?.pages, totalPages);
-
-      if (pagesToExtract.length === 0) {
-        return null;
-      }
-
-      // Extract text from specified pages
-      const pageTexts: string[] = [];
-
-      for (const pageNum of pagesToExtract) {
-        try {
-          const page = await pdf.getPage(pageNum);
-          const textContent = await page.getTextContent();
-
-          // Combine text items into a single string
-          const pageText = textContent.items.map(readTextItem).join(' ').trim();
-
-          pageTexts.push(pageText);
-        } catch (pageError) {
-          console.warn(
-            `Failed to extract text from page ${pageNum}:`,
-            pageError,
-          );
-          pageTexts.push(''); // Add empty string to maintain page order
+        if (pagesToExtract.length === 0) {
+          return null;
         }
+
+        // Extract text from specified pages
+        const pageTexts: string[] = [];
+
+        for (const pageNum of pagesToExtract) {
+          try {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+
+            // Combine text items into a single string
+            const pageText = textContent.items
+              .map(readTextItem)
+              .join(' ')
+              .trim();
+
+            pageTexts.push(pageText);
+          } catch (pageError) {
+            console.warn(
+              `Failed to extract text from page ${pageNum}:`,
+              pageError,
+            );
+            pageTexts.push(''); // Add empty string to maintain page order
+          }
+        }
+
+        // Merge page texts according to options
+        const mergedText = this.mergePageTexts(pageTexts, options?.mergePages);
+
+        return mergedText || null;
+      } finally {
+        await this.closePDFDocument(pdf);
       }
-
-      // Merge page texts according to options
-      const mergedText = this.mergePageTexts(pageTexts, options?.mergePages);
-
-      return mergedText || null;
     } catch (error) {
       console.error('unpdf text extraction failed:', error);
       return null;
@@ -256,36 +316,40 @@ export class UnpdfProvider extends BasePDFReader {
   async extractMetadata(source: PDFSource): Promise<PDFMetadata> {
     try {
       const unpdf = await this.loadUnpdf();
-      const buffer = await this.normalizeSource(source);
+      const pdf = await this.loadPDFDocument(unpdf, source);
 
-      if (!this.validatePDFData(buffer)) {
-        throw new Error('Invalid PDF data');
+      try {
+        const metadata = await pdf.getMetadata();
+
+        return {
+          pageCount: pdf.numPages,
+          title: getMetadataInfoValue(metadata?.info, 'Title'),
+          author: getMetadataInfoValue(metadata?.info, 'Author'),
+          subject: getMetadataInfoValue(metadata?.info, 'Subject'),
+          keywords: getMetadataInfoValue(metadata?.info, 'Keywords'),
+          creationDate: getMetadataInfoDate(metadata?.info, 'CreationDate'),
+          modificationDate: getMetadataInfoDate(metadata?.info, 'ModDate'),
+          version: getMetadataInfoValue(metadata?.info, 'PDFFormatVersion'),
+          creator: getMetadataInfoValue(metadata?.info, 'Creator'),
+          producer: getMetadataInfoValue(metadata?.info, 'Producer'),
+          encrypted:
+            getMetadataInfoValue(metadata?.info, 'Encrypted') === 'Yes',
+        };
+      } finally {
+        await this.closePDFDocument(pdf);
       }
-
-      const pdf = await unpdf.getDocumentProxy(buffer);
-      const metadata = await pdf.getMetadata();
-
-      return {
-        pageCount: pdf.numPages,
-        title: getMetadataInfoValue(metadata?.info, 'Title'),
-        author: getMetadataInfoValue(metadata?.info, 'Author'),
-        subject: getMetadataInfoValue(metadata?.info, 'Subject'),
-        keywords: getMetadataInfoValue(metadata?.info, 'Keywords'),
-        creationDate: getMetadataInfoDate(metadata?.info, 'CreationDate'),
-        modificationDate: getMetadataInfoDate(metadata?.info, 'ModDate'),
-        version: getMetadataInfoValue(metadata?.info, 'PDFFormatVersion'),
-        creator: getMetadataInfoValue(metadata?.info, 'Creator'),
-        producer: getMetadataInfoValue(metadata?.info, 'Producer'),
-        encrypted: getMetadataInfoValue(metadata?.info, 'Encrypted') === 'Yes',
-      };
     } catch (error) {
       console.error('unpdf metadata extraction failed:', error);
       // Return default metadata with at least page count if possible
       try {
         const unpdf = await this.loadUnpdf();
-        const buffer = await this.normalizeSource(source);
-        const pdf = await unpdf.getDocumentProxy(buffer);
-        return this.createDefaultMetadata(pdf.numPages);
+        const pdf = await this.loadPDFDocument(unpdf, source);
+
+        try {
+          return this.createDefaultMetadata(pdf.numPages);
+        } finally {
+          await this.closePDFDocument(pdf);
+        }
       } catch {
         return this.createDefaultMetadata(0);
       }
@@ -352,7 +416,7 @@ export class UnpdfProvider extends BasePDFReader {
     // Clone in-memory sources so PDF.js worker transfer does not detach caller-owned buffers.
     const documentData =
       typeof source === 'string' ? buffer : new Uint8Array(buffer);
-    return unpdf.getDocumentProxy(documentData);
+    return unpdf.getDocumentProxy(documentData, this.getPdfjsDocumentOptions());
   }
 
   private async closePDFDocument(pdf: UnpdfDocumentProxy): Promise<void> {
@@ -667,107 +731,114 @@ export class UnpdfProvider extends BasePDFReader {
         throw new Error('Invalid PDF data');
       }
 
-      const pdf = await unpdf.getDocumentProxy(buffer);
-      const metadata = await pdf.getMetadata();
+      const pdf = await this.loadPDFDocument(unpdf, buffer);
 
-      // Quick analysis of document structure
-      const pageCount = pdf.numPages;
-      let hasEmbeddedText = false;
-      let hasImages = false;
-      let estimatedTextLength = 0;
+      try {
+        const metadata = await pdf.getMetadata();
 
-      // Sample first few pages to determine content type
-      const pagesToSample = Math.min(3, pageCount);
-      for (let i = 1; i <= pagesToSample; i++) {
-        try {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
+        // Quick analysis of document structure
+        const pageCount = pdf.numPages;
+        let hasEmbeddedText = false;
+        let hasImages = false;
+        let estimatedTextLength = 0;
 
-          if (content.items && content.items.length > 0) {
-            hasEmbeddedText = true;
-            // Estimate text length based on sample
-            const pageTextLength = content.items.reduce(
-              (len: number, item: TextItem | TextMarkedContent) =>
-                len + readTextItem(item).length,
-              0,
-            );
-            estimatedTextLength += pageTextLength;
+        // Sample first few pages to determine content type
+        const pagesToSample = Math.min(3, pageCount);
+        for (let i = 1; i <= pagesToSample; i++) {
+          try {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+
+            if (content.items && content.items.length > 0) {
+              hasEmbeddedText = true;
+              // Estimate text length based on sample
+              const pageTextLength = content.items.reduce(
+                (len: number, item: TextItem | TextMarkedContent) =>
+                  len + readTextItem(item).length,
+                0,
+              );
+              estimatedTextLength += pageTextLength;
+            }
+
+            // Check for images (simplified check for rendering operations)
+            const ops = await page.getOperatorList();
+            if (ops.fnArray?.some((op: number) => op === 82 || op === 85)) {
+              // paintImageXObject operations
+              hasImages = true;
+            }
+          } catch (pageError) {
+            // Skip problematic pages
+            console.warn(`Failed to analyze page ${i}:`, pageError);
           }
-
-          // Check for images (simplified check for rendering operations)
-          const ops = await page.getOperatorList();
-          if (ops.fnArray?.some((op: number) => op === 82 || op === 85)) {
-            // paintImageXObject operations
-            hasImages = true;
-          }
-        } catch (pageError) {
-          // Skip problematic pages
-          console.warn(`Failed to analyze page ${i}:`, pageError);
         }
-      }
 
-      // Scale estimated text length to full document
-      if (estimatedTextLength > 0 && pageCount > pagesToSample) {
-        estimatedTextLength = Math.round(
-          (estimatedTextLength / pagesToSample) * pageCount,
-        );
-      }
+        // Scale estimated text length to full document
+        if (estimatedTextLength > 0 && pageCount > pagesToSample) {
+          estimatedTextLength = Math.round(
+            (estimatedTextLength / pagesToSample) * pageCount,
+          );
+        }
 
-      // Determine processing strategy
-      let recommendedStrategy: 'text' | 'ocr' | 'hybrid';
-      let ocrRequired = false;
+        // Determine processing strategy
+        let recommendedStrategy: 'text' | 'ocr' | 'hybrid';
+        let ocrRequired = false;
 
-      if (hasEmbeddedText) {
-        if (hasImages && estimatedTextLength < 500) {
-          // Has embedded text but very little - might need OCR for images
-          recommendedStrategy = 'hybrid';
-          ocrRequired = false;
+        if (hasEmbeddedText) {
+          if (hasImages && estimatedTextLength < 500) {
+            // Has embedded text but very little - might need OCR for images
+            recommendedStrategy = 'hybrid';
+            ocrRequired = false;
+          } else {
+            // Sufficient embedded text
+            recommendedStrategy = 'text';
+            ocrRequired = false;
+          }
         } else {
-          // Sufficient embedded text
-          recommendedStrategy = 'text';
-          ocrRequired = false;
+          // No embedded text found - likely image-based PDF
+          recommendedStrategy = 'ocr';
+          ocrRequired = true;
         }
-      } else {
-        // No embedded text found - likely image-based PDF
-        recommendedStrategy = 'ocr';
-        ocrRequired = true;
-      }
 
-      // Estimate processing times
-      const estimatedProcessingTime = {
-        textExtraction: hasEmbeddedText
-          ? ((estimatedTextLength > 50000 ? 'medium' : 'fast') as
-              | 'fast'
-              | 'medium'
-              | 'slow')
-          : ('fast' as 'fast' | 'medium' | 'slow'),
-        ocrProcessing:
-          hasImages || ocrRequired
-            ? ((pageCount > 10 ? 'slow' : pageCount > 3 ? 'medium' : 'fast') as
+        // Estimate processing times
+        const estimatedProcessingTime = {
+          textExtraction: hasEmbeddedText
+            ? ((estimatedTextLength > 50000 ? 'medium' : 'fast') as
                 | 'fast'
                 | 'medium'
                 | 'slow')
-            : undefined,
-      };
+            : ('fast' as 'fast' | 'medium' | 'slow'),
+          ocrProcessing:
+            hasImages || ocrRequired
+              ? ((pageCount > 10
+                  ? 'slow'
+                  : pageCount > 3
+                    ? 'medium'
+                    : 'fast') as 'fast' | 'medium' | 'slow')
+              : undefined,
+        };
 
-      return {
-        pageCount,
-        fileSize: buffer.length,
-        version: getMetadataInfoValue(metadata?.info, 'PDFFormatVersion'),
-        encrypted: getMetadataInfoValue(metadata?.info, 'Encrypted') === 'Yes',
-        hasEmbeddedText,
-        hasImages,
-        estimatedTextLength:
-          estimatedTextLength > 0 ? estimatedTextLength : undefined,
-        recommendedStrategy,
-        ocrRequired,
-        estimatedProcessingTime,
-        title: getMetadataInfoValue(metadata?.info, 'Title'),
-        author: getMetadataInfoValue(metadata?.info, 'Author'),
-        creationDate: getMetadataInfoDate(metadata?.info, 'CreationDate'),
-        creator: getMetadataInfoValue(metadata?.info, 'Creator'),
-        producer: getMetadataInfoValue(metadata?.info, 'Producer'),
-      };
+        return {
+          pageCount,
+          fileSize: buffer.length,
+          version: getMetadataInfoValue(metadata?.info, 'PDFFormatVersion'),
+          encrypted:
+            getMetadataInfoValue(metadata?.info, 'Encrypted') === 'Yes',
+          hasEmbeddedText,
+          hasImages,
+          estimatedTextLength:
+            estimatedTextLength > 0 ? estimatedTextLength : undefined,
+          recommendedStrategy,
+          ocrRequired,
+          estimatedProcessingTime,
+          title: getMetadataInfoValue(metadata?.info, 'Title'),
+          author: getMetadataInfoValue(metadata?.info, 'Author'),
+          creationDate: getMetadataInfoDate(metadata?.info, 'CreationDate'),
+          creator: getMetadataInfoValue(metadata?.info, 'Creator'),
+          producer: getMetadataInfoValue(metadata?.info, 'Producer'),
+        };
+      } finally {
+        await this.closePDFDocument(pdf);
+      }
     } catch (error) {
       console.error('unpdf getInfo failed:', error);
 
