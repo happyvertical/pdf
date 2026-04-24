@@ -17,6 +17,7 @@ const CHILD_WORKER_PATHS = [
   new URL(/* @vite-ignore */ '../node/extract-worker.js', import.meta.url),
   new URL(/* @vite-ignore */ './node/extract-worker.js', import.meta.url),
 ];
+const MAX_CHILD_STDERR_CHARS = 64 * 1024;
 
 type WorkerSourcePayload =
   | { kind: 'path'; path: string }
@@ -135,6 +136,24 @@ function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
+export function appendToDiagnosticTail(
+  current: string,
+  chunk: string,
+  limit = MAX_CHILD_STDERR_CHARS,
+): string {
+  const combined = current + chunk;
+  return combined.length > limit ? combined.slice(-limit) : combined;
+}
+
+function formatChildStderr(stderr: string, truncated: boolean): string {
+  const trimmed = stderr.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  return truncated ? `[stderr truncated]\n${trimmed}` : trimmed;
+}
+
 export async function extractTextInChildProcess(
   source: PDFSource,
   options: ExtractTextOptions | undefined,
@@ -162,6 +181,7 @@ export async function extractTextInChildProcess(
 
       let stdout = '';
       let stderr = '';
+      let stderrTruncated = false;
       let settled = false;
       let timeout: NodeJS.Timeout | undefined;
 
@@ -191,7 +211,11 @@ export async function extractTextInChildProcess(
         stdout += chunk;
       });
       child.stderr.on('data', (chunk) => {
-        stderr += chunk;
+        const text = String(chunk);
+        stderrTruncated =
+          stderrTruncated ||
+          stderr.length + text.length > MAX_CHILD_STDERR_CHARS;
+        stderr = appendToDiagnosticTail(stderr, text);
       });
       child.on('error', (error) => {
         finish(() => reject(error));
@@ -208,10 +232,11 @@ export async function extractTextInChildProcess(
       child.on('close', (code, signal) => {
         finish(() => {
           if (code !== 0) {
+            const stderrMessage = formatChildStderr(stderr, stderrTruncated);
             reject(
               new PDFChildExtractionError(
                 `PDF child extraction exited with ${signal ?? code}${
-                  stderr.trim() ? `: ${stderr.trim()}` : ''
+                  stderrMessage ? `: ${stderrMessage}` : ''
                 }`,
               ),
             );
@@ -222,11 +247,12 @@ export async function extractTextInChildProcess(
           try {
             result = JSON.parse(stdout) as WorkerResult;
           } catch (error) {
+            const stderrMessage = formatChildStderr(stderr, stderrTruncated);
             reject(
               new PDFChildExtractionError(
                 `PDF child extraction returned invalid JSON: ${
                   error instanceof Error ? error.message : String(error)
-                }${stderr.trim() ? `; stderr: ${stderr.trim()}` : ''}`,
+                }${stderrMessage ? `; stderr: ${stderrMessage}` : ''}`,
               ),
             );
             return;
