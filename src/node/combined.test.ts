@@ -1,9 +1,24 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PDFBatchExtractionError, PDFFileSizeError } from '../shared/types';
+import { DISABLE_CHILD_EXTRACTION_ENV } from './child-extraction';
 import { CombinedNodeProvider } from './combined';
 import { UnpdfProvider } from './unpdf';
 
 describe('CombinedNodeProvider', () => {
+  const originalChildExtractionEnv = process.env[DISABLE_CHILD_EXTRACTION_ENV];
+
+  beforeEach(() => {
+    process.env[DISABLE_CHILD_EXTRACTION_ENV] = '1';
+  });
+
+  afterEach(() => {
+    if (originalChildExtractionEnv === undefined) {
+      delete process.env[DISABLE_CHILD_EXTRACTION_ENV];
+    } else {
+      process.env[DISABLE_CHILD_EXTRACTION_ENV] = originalChildExtractionEnv;
+    }
+  });
+
   it('should report unavailable when unpdf dependencies are missing', async () => {
     const reader = new CombinedNodeProvider() as any;
 
@@ -409,6 +424,58 @@ describe('CombinedNodeProvider', () => {
       reader.extractText(new Uint8Array([1, 2, 3, 4, 5])),
     ).rejects.toBeInstanceOf(PDFFileSizeError);
     expect(reader.getInfo).not.toHaveBeenCalled();
+  });
+
+  it('offloads large extractions without blocking the parent heartbeat loop', async () => {
+    delete process.env[DISABLE_CHILD_EXTRACTION_ENV];
+
+    const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(25 * 1024 * 1024);
+    reader.getInfo = vi.fn();
+    reader.childExtractText = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve('child text'), 20);
+        }),
+    );
+
+    let heartbeatTicks = 0;
+    const heartbeat = setInterval(() => {
+      heartbeatTicks += 1;
+    }, 1);
+
+    try {
+      await expect(reader.extractText('/tmp/large.pdf')).resolves.toBe(
+        'child text',
+      );
+    } finally {
+      clearInterval(heartbeat);
+    }
+
+    expect(heartbeatTicks).toBeGreaterThan(0);
+    expect(reader.childExtractText).toHaveBeenCalledWith(
+      '/tmp/large.pdf',
+      undefined,
+    );
+    expect(reader.getInfo).not.toHaveBeenCalled();
+  });
+
+  it('propagates child extraction failures instead of falling back to partial local work', async () => {
+    delete process.env[DISABLE_CHILD_EXTRACTION_ENV];
+
+    const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(25 * 1024 * 1024);
+    reader.childExtractText = vi
+      .fn()
+      .mockRejectedValue(new Error('child extraction failed'));
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue('local text'),
+    };
+
+    await expect(reader.extractText('/tmp/large.pdf')).rejects.toThrow(
+      'child extraction failed',
+    );
+    expect(reader.unpdfProvider.extractText).not.toHaveBeenCalled();
   });
 
   it('skips expensive getInfo for small inputs without paging hints', async () => {
