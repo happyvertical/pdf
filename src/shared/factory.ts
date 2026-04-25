@@ -56,6 +56,7 @@ async function canUseCombinedNodeProvider(
       ocrProvider: options.ocrProvider,
       defaultOCROptions: options.defaultOCROptions,
       maxFileSize: options.maxFileSize,
+      timeout: options.timeout,
     });
     const deps = await reader.checkDependencies();
     return deps.available;
@@ -210,6 +211,7 @@ export async function getPDFReader(
         ocrProvider: readerOptions.ocrProvider as string | undefined,
         defaultOCROptions: readerOptions.defaultOCROptions,
         maxFileSize: readerOptions.maxFileSize,
+        timeout: readerOptions.timeout,
       });
     }
 

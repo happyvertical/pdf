@@ -18,6 +18,10 @@ import type {
   PDFSource,
 } from '../shared/types';
 import { PDFBatchExtractionError, PDFFileSizeError } from '../shared/types';
+import {
+  canUseChildExtraction,
+  extractTextInChildProcess,
+} from './child-extraction';
 import { UnpdfProvider } from './unpdf';
 
 const LARGE_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
@@ -40,21 +44,26 @@ export class CombinedNodeProvider extends BasePDFReader {
   protected name = 'combined-node';
   private unpdfProvider: UnpdfProvider;
   private ocrFactory: ReturnType<typeof getOCR>;
+  private ocrProvider?: string;
   private defaultOCROptions?: OCROptions;
   private maxFileSize?: number;
+  private timeout?: number;
 
   constructor(
     options: {
       ocrProvider?: string;
       defaultOCROptions?: OCROptions;
       maxFileSize?: number;
+      timeout?: number;
     } = {},
   ) {
     super();
     this.unpdfProvider = new UnpdfProvider();
+    this.ocrProvider = options.ocrProvider;
     this.ocrFactory = getOCR({ provider: options.ocrProvider || 'auto' });
     this.defaultOCROptions = options.defaultOCROptions;
     this.maxFileSize = options.maxFileSize;
+    this.timeout = options.timeout;
   }
 
   private mergeOCROptions(options?: OCROptions): OCROptions | undefined {
@@ -133,6 +142,32 @@ export class CombinedNodeProvider extends BasePDFReader {
     }
 
     return Boolean(options?.pages && options.pages.length > OCR_BATCH_SIZE);
+  }
+
+  private shouldUseChildExtraction(
+    sourceByteLength: number | undefined,
+  ): boolean {
+    return Boolean(
+      canUseChildExtraction() &&
+        sourceByteLength &&
+        sourceByteLength >= LARGE_DOCUMENT_BATCH_BYTES,
+    );
+  }
+
+  private childExtractText(
+    source: PDFSource,
+    options?: ExtractTextOptions,
+  ): Promise<string | null> {
+    return extractTextInChildProcess(
+      source,
+      options,
+      {
+        ocrProvider: this.ocrProvider,
+        defaultOCROptions: this.defaultOCROptions,
+        maxFileSize: this.maxFileSize,
+      },
+      this.timeout,
+    );
   }
 
   private chunkPages(pages: number[], batchSize: number): number[][] {
@@ -354,9 +389,16 @@ export class CombinedNodeProvider extends BasePDFReader {
       return null;
     }
 
+    let usingChildExtraction = false;
+
     try {
       const sourceByteLength = await this.getSourceByteLength(source);
       await this.assertWithinConfiguredMaxFileSize(source, sourceByteLength);
+
+      if (this.shouldUseChildExtraction(sourceByteLength)) {
+        usingChildExtraction = true;
+        return await this.childExtractText(source, options);
+      }
 
       if (this.shouldInspectForBatching(sourceByteLength, options)) {
         const info = await this.getInfo(source);
@@ -414,6 +456,10 @@ export class CombinedNodeProvider extends BasePDFReader {
         error instanceof PDFBatchExtractionError ||
         error instanceof PDFFileSizeError
       ) {
+        throw error;
+      }
+
+      if (usingChildExtraction) {
         throw error;
       }
 
