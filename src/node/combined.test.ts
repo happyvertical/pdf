@@ -214,6 +214,101 @@ describe('CombinedNodeProvider', () => {
     expect(reader.ocrFactory.performOCR).toHaveBeenCalledTimes(3);
   });
 
+  it('continues large OCR extraction when one batch has no recognized text', async () => {
+    const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(30 * 1024 * 1024);
+
+    reader.getInfo = vi.fn().mockResolvedValue({
+      pageCount: 5,
+      fileSize: 30 * 1024 * 1024,
+      encrypted: false,
+      hasEmbeddedText: false,
+      hasImages: true,
+      recommendedStrategy: 'ocr',
+      ocrRequired: true,
+      estimatedProcessingTime: {
+        textExtraction: 'slow',
+        ocrProcessing: 'slow',
+      },
+    });
+
+    reader.unpdfProvider = {
+      renderPages: vi.fn().mockImplementation(async (_source, options) => {
+        return (options?.pages ?? []).map((pageNumber: number) => ({
+          data: Buffer.from([pageNumber]),
+          format: 'rgb',
+          width: 10,
+          height: 10,
+          channels: 3,
+          pageNumber,
+        }));
+      }),
+    };
+    reader.ocrFactory = {
+      performOCR: vi
+        .fn()
+        .mockResolvedValueOnce({
+          text: '',
+          confidence: 0,
+        })
+        .mockResolvedValueOnce({
+          text: 'ocr:5',
+          confidence: 99,
+        }),
+    };
+
+    await expect(
+      reader.extractText('/tmp/scanned.pdf', { mergePages: true }),
+    ).resolves.toBe('ocr:5');
+    expect(reader.unpdfProvider.renderPages).toHaveBeenCalledTimes(2);
+    expect(reader.ocrFactory.performOCR).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws an explicit OCR fallback error when every OCR batch is empty', async () => {
+    const reader = new CombinedNodeProvider() as any;
+    reader.getSourceByteLength = vi.fn().mockResolvedValue(30 * 1024 * 1024);
+
+    reader.getInfo = vi.fn().mockResolvedValue({
+      pageCount: 5,
+      fileSize: 30 * 1024 * 1024,
+      encrypted: false,
+      hasEmbeddedText: false,
+      hasImages: true,
+      recommendedStrategy: 'ocr',
+      ocrRequired: true,
+      estimatedProcessingTime: {
+        textExtraction: 'slow',
+        ocrProcessing: 'slow',
+      },
+    });
+
+    reader.unpdfProvider = {
+      renderPages: vi.fn().mockImplementation(async (_source, options) => {
+        return (options?.pages ?? []).map((pageNumber: number) => ({
+          data: Buffer.from([pageNumber]),
+          format: 'rgb',
+          width: 10,
+          height: 10,
+          channels: 3,
+          pageNumber,
+        }));
+      }),
+    };
+    reader.ocrFactory = {
+      performOCR: vi.fn().mockResolvedValue({
+        text: '',
+        confidence: 0,
+      }),
+    };
+
+    await expect(
+      reader.extractText('/tmp/scanned.pdf', { mergePages: true }),
+    ).rejects.toBeInstanceOf(PDFOCRFallbackError);
+    await expect(
+      reader.extractText('/tmp/scanned.pdf', { mergePages: true }),
+    ).rejects.toThrow('OCR fallback produced no text for pages 1-5.');
+  });
+
   it('applies default OCR options during automatic OCR fallback', async () => {
     const reader = new CombinedNodeProvider({
       defaultOCROptions: {
@@ -296,6 +391,25 @@ describe('CombinedNodeProvider', () => {
         throwOnError: true,
       }),
     );
+  });
+
+  it('returns null for invalid OCR fallback pages without rendering', async () => {
+    const reader = new CombinedNodeProvider() as any;
+
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue(''),
+      getInfo: vi.fn().mockResolvedValue({ pageCount: 2 }),
+      renderPages: vi.fn(),
+    };
+    reader.ocrFactory = {
+      performOCR: vi.fn(),
+    };
+
+    await expect(
+      reader.extractText('/tmp/scanned.pdf', { pages: [99] }),
+    ).resolves.toBeNull();
+    expect(reader.unpdfProvider.renderPages).not.toHaveBeenCalled();
+    expect(reader.ocrFactory.performOCR).not.toHaveBeenCalled();
   });
 
   it('surfaces OCR fallback rendering failures instead of returning null', async () => {

@@ -226,9 +226,17 @@ export class CombinedNodeProvider extends BasePDFReader {
       return 'all pages';
     }
 
-    return pages.length > 1
+    if (pages.length === 1) {
+      return `page ${pages[0]}`;
+    }
+
+    const isContiguous = pages.every(
+      (page, index) => index === 0 || page === pages[index - 1] + 1,
+    );
+
+    return isContiguous
       ? `pages ${pages[0]}-${pages[pages.length - 1]}`
-      : `page ${pages[0]}`;
+      : `pages ${pages.join(', ')}`;
   }
 
   private async extractTextPageWise(
@@ -274,9 +282,39 @@ export class CombinedNodeProvider extends BasePDFReader {
     ).trim();
   }
 
+  private createEmptyOcrTextError(
+    ocrResult: OCRResult,
+    pages?: number[],
+  ): PDFOCRFallbackError {
+    const metadataProvider =
+      typeof ocrResult.metadata?.provider === 'string'
+        ? ` Provider: ${ocrResult.metadata.provider}.`
+        : '';
+    const confidence =
+      typeof ocrResult.confidence === 'number'
+        ? ` Confidence: ${ocrResult.confidence.toFixed(1)}.`
+        : '';
+    const detectionCount = Array.isArray(ocrResult.detections)
+      ? ` Detections: ${ocrResult.detections.length}.`
+      : '';
+
+    return new PDFOCRFallbackError(
+      `OCR fallback produced no text for ${this.formatPagesLabel(pages)}.${metadataProvider}${confidence}${detectionCount}`,
+      pages,
+    );
+  }
+
+  private createEmptyBatchedOcrTextError(pages: number[]): PDFOCRFallbackError {
+    return new PDFOCRFallbackError(
+      `OCR fallback produced no text for ${this.formatPagesLabel(pages)}.`,
+      pages,
+    );
+  }
+
   private async extractOcrBatch(
     source: PDFSource,
     pages?: number[],
+    options: { requireText?: boolean } = {},
   ): Promise<OCRResult> {
     const renderedPages = await this.unpdfProvider.renderPages(source, {
       scale: 2.0,
@@ -297,23 +335,8 @@ export class CombinedNodeProvider extends BasePDFReader {
     );
     const ocrText = ocrResult.text?.trim() || '';
 
-    if (!ocrText) {
-      const metadataProvider =
-        typeof ocrResult.metadata?.provider === 'string'
-          ? ` Provider: ${ocrResult.metadata.provider}.`
-          : '';
-      const confidence =
-        typeof ocrResult.confidence === 'number'
-          ? ` Confidence: ${ocrResult.confidence.toFixed(1)}.`
-          : '';
-      const detectionCount = Array.isArray(ocrResult.detections)
-        ? ` Detections: ${ocrResult.detections.length}.`
-        : '';
-
-      throw new PDFOCRFallbackError(
-        `OCR fallback produced no text for ${this.formatPagesLabel(pages)}.${metadataProvider}${confidence}${detectionCount}`,
-        pages,
-      );
+    if (options.requireText && !ocrText) {
+      throw this.createEmptyOcrTextError(ocrResult, pages);
     }
 
     return ocrResult;
@@ -322,8 +345,9 @@ export class CombinedNodeProvider extends BasePDFReader {
   private async extractOcrBatchText(
     source: PDFSource,
     pages?: number[],
+    options?: { requireText?: boolean },
   ): Promise<string> {
-    const ocrResult = await this.extractOcrBatch(source, pages);
+    const ocrResult = await this.extractOcrBatch(source, pages, options);
     return ocrResult.text?.trim() || '';
   }
 
@@ -386,7 +410,15 @@ export class CombinedNodeProvider extends BasePDFReader {
         options,
       );
       const mergedText = this.mergePageTexts(pageTexts, false);
-      return mergedText.trim() ? mergedText : null;
+      if (mergedText.trim()) {
+        return mergedText;
+      }
+
+      if (strategy === 'ocr') {
+        throw this.createEmptyBatchedOcrTextError(pagesToExtract);
+      }
+
+      return null;
     }
 
     const batchTexts: string[] = [];
@@ -415,7 +447,16 @@ export class CombinedNodeProvider extends BasePDFReader {
     }
 
     const mergedText = this.mergePageTexts(batchTexts, options?.mergePages);
-    return mergedText.trim() ? mergedText : null;
+    const trimmedText = mergedText.trim();
+    if (trimmedText) {
+      return options?.mergePages === true ? trimmedText : mergedText;
+    }
+
+    if (strategy === 'ocr') {
+      throw this.createEmptyBatchedOcrTextError(pagesToExtract);
+    }
+
+    return null;
   }
 
   /**
@@ -475,8 +516,18 @@ export class CombinedNodeProvider extends BasePDFReader {
           return text;
         }
 
+        const fallbackPages = options?.pages
+          ? this.normalizePages(options.pages, fallbackInfo.pageCount)
+          : undefined;
+
+        if (options?.pages && !fallbackPages?.length) {
+          return text?.trim() ? text : null;
+        }
+
         try {
-          return await this.extractOcrBatchText(source, options?.pages);
+          return await this.extractOcrBatchText(source, fallbackPages, {
+            requireText: true,
+          });
         } catch (ocrError) {
           if (ocrError instanceof PDFOCRFallbackError) {
             throw ocrError;
@@ -485,8 +536,8 @@ export class CombinedNodeProvider extends BasePDFReader {
           const message =
             ocrError instanceof Error ? ocrError.message : String(ocrError);
           throw new PDFOCRFallbackError(
-            `OCR fallback failed for ${this.formatPagesLabel(options?.pages)}: ${message}`,
-            options?.pages,
+            `OCR fallback failed for ${this.formatPagesLabel(fallbackPages)}: ${message}`,
+            fallbackPages,
           );
         }
       }
