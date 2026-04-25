@@ -393,24 +393,30 @@ describe('CombinedNodeProvider', () => {
     );
   });
 
-  it('returns null for invalid OCR fallback pages without rendering', async () => {
-    const reader = new CombinedNodeProvider() as any;
+  it.each([
+    { pages: [] as number[], label: 'empty' },
+    { pages: [99], label: 'out-of-range' },
+  ])(
+    'returns null for $label OCR fallback pages without rendering',
+    async ({ pages }) => {
+      const reader = new CombinedNodeProvider() as any;
 
-    reader.unpdfProvider = {
-      extractText: vi.fn().mockResolvedValue(''),
-      getInfo: vi.fn().mockResolvedValue({ pageCount: 2 }),
-      renderPages: vi.fn(),
-    };
-    reader.ocrFactory = {
-      performOCR: vi.fn(),
-    };
+      reader.unpdfProvider = {
+        extractText: vi.fn().mockResolvedValue(''),
+        getInfo: vi.fn().mockResolvedValue({ pageCount: 2 }),
+        renderPages: vi.fn(),
+      };
+      reader.ocrFactory = {
+        performOCR: vi.fn(),
+      };
 
-    await expect(
-      reader.extractText('/tmp/scanned.pdf', { pages: [99] }),
-    ).resolves.toBeNull();
-    expect(reader.unpdfProvider.renderPages).not.toHaveBeenCalled();
-    expect(reader.ocrFactory.performOCR).not.toHaveBeenCalled();
-  });
+      await expect(
+        reader.extractText('/tmp/scanned.pdf', { pages }),
+      ).resolves.toBeNull();
+      expect(reader.unpdfProvider.renderPages).not.toHaveBeenCalled();
+      expect(reader.ocrFactory.performOCR).not.toHaveBeenCalled();
+    },
+  );
 
   it('surfaces OCR fallback rendering failures instead of returning null', async () => {
     const reader = new CombinedNodeProvider() as any;
@@ -974,6 +980,18 @@ describe('UnpdfProvider', () => {
 
     await expect(reader.extractImages(new Uint8Array())).resolves.toEqual([]);
     expect(reader.loadUnpdf).not.toHaveBeenCalled();
+  });
+
+  it('does not reject non-empty ArrayBuffer render sources as invalid input', async () => {
+    const reader = new UnpdfProvider() as any;
+    reader.ensurePdfjsWorkerConfigured = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      reader.renderPages(new Uint8Array([1, 2, 3, 4, 5]).buffer, {
+        throwOnError: true,
+      }),
+    ).rejects.toBeInstanceOf(PDFOCRFallbackError);
+    expect(reader.ensurePdfjsWorkerConfigured).toHaveBeenCalledOnce();
   });
 
   it('preserves page and image order across collected image batches', async () => {

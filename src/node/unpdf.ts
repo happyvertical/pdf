@@ -685,14 +685,7 @@ export class UnpdfProvider extends BasePDFReader {
     options?: RenderPagesOptions,
   ): Promise<PDFImage[]> {
     // Handle invalid inputs gracefully
-    if (
-      !source ||
-      (typeof source === 'string' && source.trim() === '') ||
-      (typeof source === 'object' &&
-        Object.keys(source).length === 0 &&
-        !(source instanceof Buffer) &&
-        !(source instanceof Uint8Array))
-    ) {
+    if (this.isInvalidSource(source)) {
       return [];
     }
 
