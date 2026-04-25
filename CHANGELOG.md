@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.62.28
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - offload large text extraction (#69) (pdf)
+
 ## 0.62.27
 
 ### Patch Changes
