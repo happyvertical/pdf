@@ -105,6 +105,10 @@ await reader.extractImages('/path/to/large-document.pdf', {
 });
 ```
 
+Collected image extraction is protected by a bounded byte limit. For large or
+image-heavy PDFs, use `onBatch` with `collect: false` to persist or OCR each
+batch incrementally instead of returning every image buffer at once.
+
 ### OCR Processing
 
 ```typescript
@@ -184,6 +188,10 @@ try {
 } catch (error) {
   if (error.name === 'PDFDependencyError') {
     console.error('Missing dependencies:', error.message);
+  } else if (error.name === 'PDFOCRFallbackError') {
+    console.error('OCR fallback failed:', error.message);
+  } else if (error.name === 'PDFImageCollectionLimitError') {
+    console.error('Use batched image extraction:', error.message);
   } else if (error.name === 'PDFUnsupportedError') {
     console.error('Unsupported operation:', error.message);
   } else {

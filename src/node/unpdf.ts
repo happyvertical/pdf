@@ -29,11 +29,17 @@ import type {
   PDFSource,
   RenderPagesOptions,
 } from '../shared/types';
-import { PDFBatchExtractionError, PDFDependencyError } from '../shared/types';
+import {
+  PDFBatchExtractionError,
+  PDFDependencyError,
+  PDFImageCollectionLimitError,
+  PDFOCRFallbackError,
+} from '../shared/types';
 import { formatPdfOcrRuntimeIssue } from './ocr-runtime';
 
 const require = createRequire(import.meta.url);
 const IMAGE_EXTRACTION_BATCH_SIZE = 4;
+const DEFAULT_MAX_COLLECTED_IMAGE_BYTES = 128 * 1024 * 1024;
 
 type UnpdfModule = typeof import('unpdf');
 type UnpdfDocumentProxy = Awaited<ReturnType<UnpdfModule['getDocumentProxy']>>;
@@ -412,6 +418,26 @@ export class UnpdfProvider extends BasePDFReader {
     return Math.floor(batchSize);
   }
 
+  private normalizeMaxCollectedImageBytes(maxCollectedBytes?: number): number {
+    if (maxCollectedBytes === undefined) {
+      return DEFAULT_MAX_COLLECTED_IMAGE_BYTES;
+    }
+
+    if (!Number.isFinite(maxCollectedBytes) || maxCollectedBytes < 0) {
+      return DEFAULT_MAX_COLLECTED_IMAGE_BYTES;
+    }
+
+    return Math.floor(maxCollectedBytes);
+  }
+
+  private getImageByteLength(image: PDFImage): number {
+    if (typeof image.data === 'string') {
+      return Buffer.byteLength(image.data);
+    }
+
+    return image.data.byteLength;
+  }
+
   private chunkPages(pages: number[], batchSize: number): number[][] {
     const batches: number[][] = [];
 
@@ -594,7 +620,11 @@ export class UnpdfProvider extends BasePDFReader {
       this.normalizeImageBatchSize(options?.batchSize),
     );
     const shouldCollect = options?.collect ?? !options?.onBatch;
+    const maxCollectedBytes = this.normalizeMaxCollectedImageBytes(
+      options?.maxCollectedBytes,
+    );
     const allImages: PDFImage[] = [];
+    let collectedBytes = 0;
 
     for (const [batchIndex, pages] of batches.entries()) {
       let images: PDFImage[];
@@ -610,6 +640,22 @@ export class UnpdfProvider extends BasePDFReader {
         throw new PDFBatchExtractionError(pages, message);
       }
 
+      let nextCollectedBytes = collectedBytes;
+
+      if (shouldCollect) {
+        const batchBytes = images.reduce(
+          (total, image) => total + this.getImageByteLength(image),
+          0,
+        );
+        nextCollectedBytes = collectedBytes + batchBytes;
+        if (nextCollectedBytes > maxCollectedBytes) {
+          throw new PDFImageCollectionLimitError(
+            nextCollectedBytes,
+            maxCollectedBytes,
+          );
+        }
+      }
+
       await options?.onBatch?.({
         images,
         pages,
@@ -621,6 +667,7 @@ export class UnpdfProvider extends BasePDFReader {
         for (const image of images) {
           allImages.push(image);
         }
+        collectedBytes = nextCollectedBytes;
       }
     }
 
@@ -638,14 +685,7 @@ export class UnpdfProvider extends BasePDFReader {
     options?: RenderPagesOptions,
   ): Promise<PDFImage[]> {
     // Handle invalid inputs gracefully
-    if (
-      !source ||
-      (typeof source === 'string' && source.trim() === '') ||
-      (typeof source === 'object' &&
-        Object.keys(source).length === 0 &&
-        !(source instanceof Buffer) &&
-        !(source instanceof Uint8Array))
-    ) {
+    if (this.isInvalidSource(source)) {
       return [];
     }
 
@@ -705,10 +745,14 @@ export class UnpdfProvider extends BasePDFReader {
         await document.destroy();
       }
     } catch (error) {
-      console.error(
-        'unpdf page rendering failed:',
-        formatPdfOcrRuntimeIssue(error),
-      );
+      const message = formatPdfOcrRuntimeIssue(error);
+      console.error('unpdf page rendering failed:', message);
+      if (options?.throwOnError) {
+        throw new PDFOCRFallbackError(
+          `PDF page rendering failed during OCR fallback: ${message}`,
+          options.pages,
+        );
+      }
       return [];
     }
   }

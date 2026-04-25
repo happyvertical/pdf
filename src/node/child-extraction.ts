@@ -9,6 +9,7 @@ import {
   PDFBatchExtractionError,
   PDFError,
   PDFFileSizeError,
+  PDFOCRFallbackError,
 } from '../shared/types';
 
 export const DISABLE_CHILD_EXTRACTION_ENV = 'HAVE_PDF_DISABLE_CHILD_EXTRACTION';
@@ -116,6 +117,13 @@ async function resolveChildWorkerPath(): Promise<string> {
 function reviveWorkerError(error: WorkerErrorPayload): Error {
   if (error.name === 'PDFBatchExtractionError' && Array.isArray(error.pages)) {
     return new PDFBatchExtractionError(error.pages, error.message);
+  }
+
+  if (error.name === 'PDFOCRFallbackError') {
+    return new PDFOCRFallbackError(
+      error.message || 'PDF OCR fallback failed',
+      error.pages,
+    );
   }
 
   if (
