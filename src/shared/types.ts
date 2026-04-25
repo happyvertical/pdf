@@ -61,6 +61,8 @@ export interface RenderPagesOptions {
   scale?: number;
   /** Specific pages to render (1-based indexing). If not provided, renders all pages */
   pages?: number[];
+  /** Whether rendering failures should be thrown instead of returning an empty list */
+  throwOnError?: boolean;
   /** Temporary folder for storing rendered images */
   outputFolder?: string;
   /** Whether to clean up rendered image files after processing */
@@ -136,6 +138,13 @@ export interface ExtractImagesOptions {
   pages?: number[];
   /** Number of pages to process per provider batch. Defaults to a small bounded batch size */
   batchSize?: number;
+  /**
+   * Maximum total image bytes to retain in the returned array when collecting.
+   *
+   * Defaults to a bounded safety limit. Streaming callers should provide onBatch
+   * and leave collect unset/false to avoid retaining image bytes.
+   */
+  maxCollectedBytes?: number;
   /**
    * Whether to accumulate extracted images into the returned array.
    *
@@ -612,6 +621,31 @@ export class PDFBatchExtractionError extends PDFError {
     );
     this.code = 'EBATCH';
     this.name = 'PDFBatchExtractionError';
+  }
+}
+
+export class PDFImageCollectionLimitError extends PDFError {
+  constructor(
+    public actualSizeBytes: number,
+    public maxSizeBytes: number,
+  ) {
+    const actualMB = (actualSizeBytes / 1024 / 1024).toFixed(1);
+    const limitMB = (maxSizeBytes / 1024 / 1024).toFixed(1);
+    super(
+      `PDF image extraction would collect ${actualMB}MB of image data, exceeding the ${limitMB}MB safety limit. Use extractImages(source, { onBatch, collect: false }) to process image batches incrementally, or raise maxCollectedBytes for trusted inputs.`,
+    );
+    this.code = 'EIMAGELIMIT';
+    this.name = 'PDFImageCollectionLimitError';
+  }
+}
+
+export class PDFOCRFallbackError extends PDFError {
+  constructor(
+    message: string,
+    public pages?: number[],
+  ) {
+    super(message, 'EOCRFALLBACK');
+    this.name = 'PDFOCRFallbackError';
   }
 }
 

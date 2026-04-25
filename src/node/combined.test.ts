@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PDFBatchExtractionError, PDFFileSizeError } from '../shared/types';
+import {
+  PDFBatchExtractionError,
+  PDFFileSizeError,
+  PDFImageCollectionLimitError,
+  PDFOCRFallbackError,
+} from '../shared/types';
 import { DISABLE_CHILD_EXTRACTION_ENV } from './child-extraction';
 import { CombinedNodeProvider } from './combined';
 import { UnpdfProvider } from './unpdf';
@@ -219,6 +224,7 @@ describe('CombinedNodeProvider', () => {
 
     reader.unpdfProvider = {
       extractText: vi.fn().mockResolvedValue(''),
+      getInfo: vi.fn().mockResolvedValue({ pageCount: 1 }),
       renderPages: vi.fn().mockResolvedValue([
         {
           data: Buffer.from([1]),
@@ -247,6 +253,70 @@ describe('CombinedNodeProvider', () => {
         confidenceThreshold: 72,
       }),
     );
+  });
+
+  it('throws an explicit OCR fallback error when rendered OCR returns no text', async () => {
+    const reader = new CombinedNodeProvider() as any;
+
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue(''),
+      getInfo: vi.fn().mockResolvedValue({ pageCount: 1 }),
+      renderPages: vi.fn().mockResolvedValue([
+        {
+          data: Buffer.from([1]),
+          format: 'rgb',
+          width: 10,
+          height: 10,
+          channels: 3,
+          pageNumber: 1,
+        },
+      ]),
+    };
+    reader.ocrFactory = {
+      performOCR: vi.fn().mockResolvedValue({
+        text: '',
+        confidence: 0,
+        detections: [],
+        metadata: {
+          provider: 'onnx',
+        },
+      }),
+    };
+
+    await expect(reader.extractText('/tmp/scanned.pdf')).rejects.toBeInstanceOf(
+      PDFOCRFallbackError,
+    );
+    await expect(reader.extractText('/tmp/scanned.pdf')).rejects.toThrow(
+      'OCR fallback produced no text for all pages. Provider: onnx. Confidence: 0.0. Detections: 0.',
+    );
+    expect(reader.unpdfProvider.renderPages).toHaveBeenCalledWith(
+      '/tmp/scanned.pdf',
+      expect.objectContaining({
+        scale: 2,
+        throwOnError: true,
+      }),
+    );
+  });
+
+  it('surfaces OCR fallback rendering failures instead of returning null', async () => {
+    const reader = new CombinedNodeProvider() as any;
+
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue(''),
+      getInfo: vi.fn().mockResolvedValue({ pageCount: 1 }),
+      renderPages: vi.fn().mockRejectedValue(new Error('canvas unavailable')),
+    };
+    reader.ocrFactory = {
+      performOCR: vi.fn(),
+    };
+
+    await expect(reader.extractText('/tmp/scanned.pdf')).rejects.toBeInstanceOf(
+      PDFOCRFallbackError,
+    );
+    await expect(reader.extractText('/tmp/scanned.pdf')).rejects.toThrow(
+      'OCR fallback failed for all pages: canvas unavailable',
+    );
+    expect(reader.ocrFactory.performOCR).not.toHaveBeenCalled();
   });
 
   it('merges explicit OCR options over configured defaults', async () => {
@@ -683,6 +753,73 @@ describe('UnpdfProvider', () => {
       expect(document.cleanup).toHaveBeenCalledOnce();
       expect(document.destroy).toHaveBeenCalledOnce();
     }
+  });
+
+  it('rejects collected image extraction before retaining unbounded image bytes', async () => {
+    const reader = new UnpdfProvider() as any;
+
+    reader.loadUnpdf = vi.fn().mockResolvedValue({
+      getDocumentProxy: vi.fn().mockResolvedValue({
+        numPages: 3,
+        cleanup: vi.fn(),
+        destroy: vi.fn(),
+      }),
+      extractImages: vi.fn().mockImplementation(async (_pdf, pageNumber) => [
+        {
+          data: Buffer.alloc(6, pageNumber),
+          width: 1,
+          height: 6,
+          channels: 1,
+        },
+      ]),
+    });
+    reader.normalizeSource = vi
+      .fn()
+      .mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]));
+    reader.validatePDFData = vi.fn().mockReturnValue(true);
+
+    await expect(
+      reader.extractImages('/tmp/large.pdf', {
+        batchSize: 1,
+        maxCollectedBytes: 10,
+      }),
+    ).rejects.toBeInstanceOf(PDFImageCollectionLimitError);
+  });
+
+  it('allows streaming image extraction without collection even when batches exceed the collection limit', async () => {
+    const reader = new UnpdfProvider() as any;
+
+    reader.loadUnpdf = vi.fn().mockResolvedValue({
+      getDocumentProxy: vi.fn().mockResolvedValue({
+        numPages: 2,
+        cleanup: vi.fn(),
+        destroy: vi.fn(),
+      }),
+      extractImages: vi.fn().mockImplementation(async (_pdf, pageNumber) => [
+        {
+          data: Buffer.alloc(12, pageNumber),
+          width: 1,
+          height: 12,
+          channels: 1,
+        },
+      ]),
+    });
+    reader.normalizeSource = vi
+      .fn()
+      .mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]));
+    reader.validatePDFData = vi.fn().mockReturnValue(true);
+
+    const seenPages: number[] = [];
+    const images = await reader.extractImages('/tmp/large.pdf', {
+      batchSize: 1,
+      maxCollectedBytes: 0,
+      onBatch: ({ pages }) => {
+        seenPages.push(...pages);
+      },
+    });
+
+    expect(images).toEqual([]);
+    expect(seenPages).toEqual([1, 2]);
   });
 
   it('passes file-backed getInfo sources through without forcing an extra buffer clone', async () => {
