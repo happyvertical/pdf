@@ -81,7 +81,13 @@ async function prepareSourcePayload(source: PDFSource): Promise<{
     source instanceof ArrayBuffer
       ? Buffer.from(source)
       : Buffer.from(source.buffer, source.byteOffset, source.byteLength);
-  await writeFile(tempFile, data);
+
+  try {
+    await writeFile(tempFile, data);
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw error;
+  }
 
   return {
     payload: { kind: 'temp-file', path: tempFile },

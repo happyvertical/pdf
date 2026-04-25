@@ -389,12 +389,15 @@ export class CombinedNodeProvider extends BasePDFReader {
       return null;
     }
 
+    let usingChildExtraction = false;
+
     try {
       const sourceByteLength = await this.getSourceByteLength(source);
       await this.assertWithinConfiguredMaxFileSize(source, sourceByteLength);
 
       if (this.shouldUseChildExtraction(sourceByteLength)) {
-        return this.childExtractText(source, options);
+        usingChildExtraction = true;
+        return await this.childExtractText(source, options);
       }
 
       if (this.shouldInspectForBatching(sourceByteLength, options)) {
@@ -453,6 +456,10 @@ export class CombinedNodeProvider extends BasePDFReader {
         error instanceof PDFBatchExtractionError ||
         error instanceof PDFFileSizeError
       ) {
+        throw error;
+      }
+
+      if (usingChildExtraction) {
         throw error;
       }
 
