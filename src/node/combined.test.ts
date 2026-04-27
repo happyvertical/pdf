@@ -846,6 +846,10 @@ describe('UnpdfProvider', () => {
     const seenBatches: number[][] = [];
     const result = await reader.extractImages('/tmp/large.pdf', {
       batchSize: 2,
+      // This test exercises batch streaming + cleanup; pin to raw output so
+      // mocked byte buffers flow through unchanged (webp encoding would
+      // turn the 1MB raw buffers into compressed payloads).
+      outputFormat: 'original',
       onBatch: async ({ images, pages, batchIndex, totalBatches }) => {
         seenBatches.push(pages);
         expect(images.map((image) => image.pageNumber)).toEqual(pages);
@@ -1028,6 +1032,9 @@ describe('UnpdfProvider', () => {
     const images = await reader.extractImages('/tmp/document.pdf', {
       pages: [2, 4, 5],
       batchSize: 2,
+      // This test asserts on the raw mocked bytes, so pin to 'original'.
+      // Encoding is covered separately in image-encoding.test.ts.
+      outputFormat: 'original',
     });
 
     expect(images.map((image) => image.pageNumber)).toEqual([2, 2, 4, 4, 5, 5]);

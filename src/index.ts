@@ -17,9 +17,38 @@ export {
 } from './shared/factory';
 export * from './shared/types';
 
+// Pure helper — safe in any environment. Use this when you only need to
+// normalize a `format` string to a canonical IANA mime type per issue #74.
+export { canonicalizeImageFormat } from './shared/image-format';
+
+import type {
+  ImageEncodingOptions,
+  PDFImage,
+  PDFImageOutputFormat,
+} from './shared/types';
+
+/**
+ * Re-encode an already-extracted `PDFImage` to a web-safe format.
+ *
+ * Companion to `extractImages({ outputFormat })` (issue #73). Use this when
+ * the original extraction returned `outputFormat: 'original'` and the
+ * caller now wants a web-safe asset.
+ *
+ * Node-only at runtime: the encoder is loaded lazily so that importing
+ * `@happyvertical/pdf` from a browser context does not pull in
+ * `@napi-rs/canvas` until you actually call this function.
+ */
+export async function encodePDFImage(
+  image: PDFImage,
+  target: PDFImageOutputFormat = 'webp',
+  options?: ImageEncodingOptions,
+): Promise<PDFImage> {
+  const mod = await import('./node/image-encoding');
+  return mod.encodePDFImage(image, target, options);
+}
+
 // Legacy compatibility exports for backward compatibility with existing code
 import { getPDFReader, initializeProviders } from './shared/factory';
-import type { PDFImage } from './shared/types';
 
 /**
  * Extract text from a PDF file (legacy compatibility)

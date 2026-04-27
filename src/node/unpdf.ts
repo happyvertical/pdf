@@ -35,7 +35,15 @@ import {
   PDFImageCollectionLimitError,
   PDFOCRFallbackError,
 } from '../shared/types';
+import { applyOutputFormat, canonicalizeImageFormat } from './image-encoding';
 import { formatPdfOcrRuntimeIssue } from './ocr-runtime';
+
+const DEFAULT_EXTRACT_IMAGES_OUTPUT_FORMAT: NonNullable<
+  ExtractImagesOptions['outputFormat']
+> = 'webp';
+const DEFAULT_RENDER_PAGES_OUTPUT_FORMAT: NonNullable<
+  RenderPagesOptions['outputFormat']
+> = 'original';
 
 const require = createRequire(import.meta.url);
 const IMAGE_EXTRACTION_BATCH_SIZE = 4;
@@ -522,29 +530,38 @@ export class UnpdfProvider extends BasePDFReader {
     pageNumber: number,
   ): PDFImage {
     const rawData = this.convertImageDataToBuffer(image.data);
-
-    // Direct RGB data processing - optimal path for OCR
     let processedData: Buffer = rawData;
-    let format = 'unknown';
+    let bitsPerComponent: number | undefined;
 
-    // If we have raw RGB data (3 channels), keep it as raw RGB
-    if (image.channels === 3 && image.width && image.height) {
-      const expectedSize = image.width * image.height * 3;
-      if (rawData.length === expectedSize) {
+    // unpdf normalizes raw pixel streams to 8-bit Uint8ClampedArray with a
+    // matching channel layout. When the byte length confirms the layout,
+    // hand the optimal raw RGB path to OCR.
+    if (
+      image.channels &&
+      image.width &&
+      image.height &&
+      rawData.length === image.width * image.height * image.channels
+    ) {
+      if (image.channels === 3) {
         processedData = this.processRawRGBData(
           rawData,
           image.width,
           image.height,
         );
-        format = 'rgb'; // Mark as raw RGB for OCR to recognize optimal path
       }
+      bitsPerComponent = 8;
     }
+
+    // Canonicalize `format` to a lowercase IANA mime type per #74 so
+    // downstream consumers don't re-implement the same normalizer.
+    const format = canonicalizeImageFormat(undefined, image.channels);
 
     return {
       data: processedData,
       width: image.width,
       height: image.height,
       channels: image.channels,
+      bitsPerComponent,
       format,
       pageNumber,
     };
@@ -623,6 +640,8 @@ export class UnpdfProvider extends BasePDFReader {
     const maxCollectedBytes = this.normalizeMaxCollectedImageBytes(
       options?.maxCollectedBytes,
     );
+    const outputFormat =
+      options?.outputFormat ?? DEFAULT_EXTRACT_IMAGES_OUTPUT_FORMAT;
     const allImages: PDFImage[] = [];
     let collectedBytes = 0;
 
@@ -639,6 +658,16 @@ export class UnpdfProvider extends BasePDFReader {
         const message = error instanceof Error ? error.message : String(error);
         throw new PDFBatchExtractionError(pages, message);
       }
+
+      // Re-encode to the requested web-safe format before any size
+      // accounting so the byte budget reflects what the caller will hold
+      // onto. WebP / JPEG outputs are typically 5-20x smaller than the
+      // raw RGB buffers, so the safety limit becomes more permissive.
+      images = await applyOutputFormat(
+        images,
+        outputFormat,
+        options?.encodingOptions,
+      );
 
       let nextCollectedBytes = collectedBytes;
 
@@ -709,6 +738,8 @@ export class UnpdfProvider extends BasePDFReader {
           document.numPages,
         );
         const images: PDFImage[] = [];
+        const outputFormat =
+          options?.outputFormat ?? DEFAULT_RENDER_PAGES_OUTPUT_FORMAT;
 
         for (const pageNumber of pagesToRender) {
           const page = await document.getPage(pageNumber);
@@ -727,11 +758,12 @@ export class UnpdfProvider extends BasePDFReader {
 
             images.push({
               data: this.rgbaToRgbBuffer(imageData.data),
-              format: 'rgb',
+              format: canonicalizeImageFormat(undefined, 3),
               pageNumber,
               width,
               height,
               channels: 3,
+              bitsPerComponent: 8,
             });
           } finally {
             page.cleanup();
@@ -740,7 +772,11 @@ export class UnpdfProvider extends BasePDFReader {
           }
         }
 
-        return images;
+        return applyOutputFormat(
+          images,
+          outputFormat,
+          options?.encodingOptions,
+        );
       } finally {
         await document.destroy();
       }
