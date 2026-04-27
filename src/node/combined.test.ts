@@ -1125,4 +1125,69 @@ describe('UnpdfProvider', () => {
       }),
     ).rejects.toBe(batchError);
   });
+
+  it('sniffs encoded JPEG/PNG streams instead of mislabelling them as raw RGB (issue #74 review)', async () => {
+    // Codex / Copilot review on PR #75: when the upstream returns a
+    // 3-channel image whose bytes are an encoded JPEG/PNG stream (byte
+    // length does not match width*height*channels), we must not label it
+    // image/x-rgb just because channels === 3.
+    const reader = new UnpdfProvider() as any;
+    const jpegPayload = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
+    ]);
+    const pngPayload = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    ]);
+    const rawRgbPayload = Buffer.alloc(2 * 2 * 3, 200); // 2x2 RGB
+    const opaqueGarbage = Buffer.from([0x00, 0x01, 0x02, 0x03]);
+
+    reader.loadUnpdf = vi.fn().mockResolvedValue({
+      getDocumentProxy: vi.fn().mockResolvedValue({
+        numPages: 4,
+        cleanup: vi.fn(),
+        destroy: vi.fn(),
+      }),
+      extractImages: vi
+        .fn()
+        .mockImplementation(async (_pdf, pageNumber: number) => {
+          if (pageNumber === 1) {
+            return [
+              { data: jpegPayload, width: 100, height: 100, channels: 3 },
+            ];
+          }
+          if (pageNumber === 2) {
+            return [{ data: pngPayload, width: 100, height: 100, channels: 4 }];
+          }
+          if (pageNumber === 3) {
+            return [{ data: rawRgbPayload, width: 2, height: 2, channels: 3 }];
+          }
+          return [{ data: opaqueGarbage, width: 99, height: 99, channels: 3 }];
+        }),
+    });
+    reader.normalizeSource = vi
+      .fn()
+      .mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]));
+    reader.validatePDFData = vi.fn().mockReturnValue(true);
+
+    const images = await reader.extractImages('/tmp/document.pdf', {
+      pages: [1, 2, 3, 4],
+      batchSize: 4,
+      // Pin to 'original' so we observe the format inferred by the
+      // extractor, not the encoding output's mime.
+      outputFormat: 'original',
+    });
+
+    expect(images.map((image: any) => image.format)).toEqual([
+      'image/jpeg', // sniffed from FF D8 FF — not labelled image/x-rgb
+      'image/png', // sniffed from PNG signature — not labelled image/x-rgba
+      'image/x-rgb', // byte length matches raw layout
+      'application/octet-stream', // no signature, no raw layout
+    ]);
+    // Encoded streams should not carry bitsPerComponent (they're not raw).
+    expect(images[0].bitsPerComponent).toBeUndefined();
+    expect(images[1].bitsPerComponent).toBeUndefined();
+    expect(images[3].bitsPerComponent).toBeUndefined();
+    // Raw layout still carries bps so consumers can decode unambiguously.
+    expect(images[2].bitsPerComponent).toBe(8);
+  });
 });

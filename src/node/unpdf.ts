@@ -18,6 +18,7 @@ import type {
   TextItem,
 } from 'pdfjs-dist/types/src/display/api';
 import { BasePDFReader } from '../shared/base';
+import { detectImageMimeFromMagicBytes } from '../shared/image-format';
 import type {
   DependencyCheckResult,
   ExtractImagesOptions,
@@ -536,25 +537,36 @@ export class UnpdfProvider extends BasePDFReader {
     // unpdf normalizes raw pixel streams to 8-bit Uint8ClampedArray with a
     // matching channel layout. When the byte length confirms the layout,
     // hand the optimal raw RGB path to OCR.
-    if (
-      image.channels &&
-      image.width &&
-      image.height &&
-      rawData.length === image.width * image.height * image.channels
-    ) {
-      if (image.channels === 3) {
-        processedData = this.processRawRGBData(
-          rawData,
-          image.width,
-          image.height,
-        );
+    const { width, height, channels } = image;
+    const isRawPixelLayout =
+      channels !== undefined &&
+      width !== undefined &&
+      height !== undefined &&
+      rawData.length === width * height * channels;
+
+    if (isRawPixelLayout && width !== undefined && height !== undefined) {
+      if (channels === 3) {
+        processedData = this.processRawRGBData(rawData, width, height);
       }
       bitsPerComponent = 8;
     }
 
-    // Canonicalize `format` to a lowercase IANA mime type per #74 so
-    // downstream consumers don't re-implement the same normalizer.
-    const format = canonicalizeImageFormat(undefined, image.channels);
+    // Canonicalize `format` to a lowercase IANA mime type per #74.
+    //
+    // Priority (per the issue #74 reviewer guidance): infer raw
+    // `image/x-*` *only* when the byte-length check confirms a raw 8-bit
+    // layout. This prevents a raw RGB buffer that happens to start with
+    // a JPEG SOI marker (e.g. pixel value 0xFF 0xD8 0xFF) from being
+    // sniffed as JPEG. When the byte-length disagrees (encoded stream),
+    // sniff magic bytes; if no signature matches, fall back to
+    // application/octet-stream rather than guessing.
+    let format: PDFImage['format'];
+    if (isRawPixelLayout) {
+      format = canonicalizeImageFormat(undefined, image.channels);
+    } else {
+      format =
+        detectImageMimeFromMagicBytes(rawData) ?? 'application/octet-stream';
+    }
 
     return {
       data: processedData,

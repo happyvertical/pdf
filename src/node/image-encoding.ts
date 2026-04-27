@@ -128,8 +128,16 @@ export async function encodePDFImage(
   const targetMime = ENCODED_MIME_TYPES[target];
 
   // Pass-through when the source already matches the requested encoding.
+  // Even though the bytes are unchanged, the contract for encoded outputs
+  // is that raw-pixel-only metadata is dropped — otherwise consumers /
+  // OCR heuristics may misread an encoded buffer as raw pixel data.
   if (canonicalFormat === targetMime) {
-    return { ...image, format: targetMime };
+    return {
+      ...image,
+      format: targetMime,
+      bitsPerComponent: undefined,
+      channels: undefined,
+    };
   }
 
   if (!isRaw8BitPixelImage(image)) {

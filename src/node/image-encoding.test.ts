@@ -4,7 +4,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { canonicalizeImageFormat } from '../shared/image-format';
+import {
+  canonicalizeImageFormat,
+  detectImageMimeFromMagicBytes,
+} from '../shared/image-format';
 import type { PDFImage } from '../shared/types';
 import { encodePDFImage } from './image-encoding';
 
@@ -51,6 +54,57 @@ describe('canonicalizeImageFormat (issue #74)', () => {
     expect(canonicalizeImageFormat('unknown', 3)).toBe('image/x-rgb');
     expect(canonicalizeImageFormat('', 4)).toBe('image/x-rgba');
     expect(canonicalizeImageFormat('bin')).toBe('application/octet-stream');
+  });
+
+  it('treats application/octet-stream as idempotent (does not re-infer raw mime from channels)', () => {
+    // Regression: when the unpdf provider explicitly sets
+    // `application/octet-stream` for an opaque buffer (byte length does
+    // not match a raw layout), `applyOutputFormat({ outputFormat:
+    // 'original' })` re-runs canonicalizeImageFormat. If channel
+    // inference wins, the final label gets "upgraded" to image/x-rgb
+    // and we re-introduce exactly the issue #74 mis-label this PR fixes.
+    expect(canonicalizeImageFormat('application/octet-stream', 3)).toBe(
+      'application/octet-stream',
+    );
+    expect(canonicalizeImageFormat('application/octet-stream', 4)).toBe(
+      'application/octet-stream',
+    );
+    expect(canonicalizeImageFormat('application/octet-stream', 1)).toBe(
+      'application/octet-stream',
+    );
+  });
+});
+
+describe('detectImageMimeFromMagicBytes', () => {
+  it('detects PNG, JPEG, WebP, and TIFF signatures', () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(detectImageMimeFromMagicBytes(png)).toBe('image/png');
+
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+    expect(detectImageMimeFromMagicBytes(jpeg)).toBe('image/jpeg');
+
+    const webp = Buffer.from([
+      0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+    ]);
+    expect(detectImageMimeFromMagicBytes(webp)).toBe('image/webp');
+
+    const tiffLE = Buffer.from([0x49, 0x49, 0x2a, 0x00]);
+    expect(detectImageMimeFromMagicBytes(tiffLE)).toBe('image/tiff');
+
+    const tiffBE = Buffer.from([0x4d, 0x4d, 0x00, 0x2a]);
+    expect(detectImageMimeFromMagicBytes(tiffBE)).toBe('image/tiff');
+  });
+
+  it('returns undefined for unrecognized / too-short buffers', () => {
+    expect(detectImageMimeFromMagicBytes(Buffer.alloc(0))).toBeUndefined();
+    expect(
+      detectImageMimeFromMagicBytes(Buffer.from([0x00, 0x01, 0x02])),
+    ).toBeUndefined();
+    // RIFF without WEBP — could be a WAV or AVI; not WebP.
+    const riffNotWebp = Buffer.from([
+      0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+    ]);
+    expect(detectImageMimeFromMagicBytes(riffNotWebp)).toBeUndefined();
   });
 });
 
@@ -139,6 +193,29 @@ describe('encodePDFImage (issue #73)', () => {
     const encoded = await encodePDFImage(sourceImage, 'png');
     expect(encoded.data).toBe(png);
     expect(encoded.format).toBe('image/png');
+  });
+
+  it('drops raw-pixel metadata in the pass-through (already-encoded) branch', async () => {
+    // If a caller had a JPEG with `channels: 3` set (e.g. inherited from
+    // an earlier raw extraction) and asks for 'jpeg' output, the pass-
+    // through branch should still drop `channels` / `bitsPerComponent`
+    // so OCR providers don't see "encoded buffer + raw-layout metadata".
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+    const sourceImage: PDFImage = {
+      data: jpeg,
+      width: 100,
+      height: 100,
+      channels: 3,
+      bitsPerComponent: 8,
+      format: 'image/jpeg',
+      pageNumber: 1,
+    };
+
+    const encoded = await encodePDFImage(sourceImage, 'jpeg');
+    expect(encoded.data).toBe(jpeg);
+    expect(encoded.format).toBe('image/jpeg');
+    expect(encoded.channels).toBeUndefined();
+    expect(encoded.bitsPerComponent).toBeUndefined();
   });
 
   it('refuses to interpret raw bytes when bitsPerComponent disagrees', async () => {
