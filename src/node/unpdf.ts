@@ -18,6 +18,7 @@ import type {
   TextItem,
 } from 'pdfjs-dist/types/src/display/api';
 import { BasePDFReader } from '../shared/base';
+import { detectImageMimeFromMagicBytes } from '../shared/image-format';
 import type {
   DependencyCheckResult,
   ExtractImagesOptions,
@@ -35,7 +36,15 @@ import {
   PDFImageCollectionLimitError,
   PDFOCRFallbackError,
 } from '../shared/types';
+import { applyOutputFormat, canonicalizeImageFormat } from './image-encoding';
 import { formatPdfOcrRuntimeIssue } from './ocr-runtime';
+
+const DEFAULT_EXTRACT_IMAGES_OUTPUT_FORMAT: NonNullable<
+  ExtractImagesOptions['outputFormat']
+> = 'webp';
+const DEFAULT_RENDER_PAGES_OUTPUT_FORMAT: NonNullable<
+  RenderPagesOptions['outputFormat']
+> = 'original';
 
 const require = createRequire(import.meta.url);
 const IMAGE_EXTRACTION_BATCH_SIZE = 4;
@@ -522,22 +531,41 @@ export class UnpdfProvider extends BasePDFReader {
     pageNumber: number,
   ): PDFImage {
     const rawData = this.convertImageDataToBuffer(image.data);
-
-    // Direct RGB data processing - optimal path for OCR
     let processedData: Buffer = rawData;
-    let format = 'unknown';
+    let bitsPerComponent: number | undefined;
 
-    // If we have raw RGB data (3 channels), keep it as raw RGB
-    if (image.channels === 3 && image.width && image.height) {
-      const expectedSize = image.width * image.height * 3;
-      if (rawData.length === expectedSize) {
-        processedData = this.processRawRGBData(
-          rawData,
-          image.width,
-          image.height,
-        );
-        format = 'rgb'; // Mark as raw RGB for OCR to recognize optimal path
+    // unpdf normalizes raw pixel streams to 8-bit Uint8ClampedArray with a
+    // matching channel layout. When the byte length confirms the layout,
+    // hand the optimal raw RGB path to OCR.
+    const { width, height, channels } = image;
+    const isRawPixelLayout =
+      channels !== undefined &&
+      width !== undefined &&
+      height !== undefined &&
+      rawData.length === width * height * channels;
+
+    if (isRawPixelLayout && width !== undefined && height !== undefined) {
+      if (channels === 3) {
+        processedData = this.processRawRGBData(rawData, width, height);
       }
+      bitsPerComponent = 8;
+    }
+
+    // Canonicalize `format` to a lowercase IANA mime type per #74.
+    //
+    // Priority (per the issue #74 reviewer guidance): infer raw
+    // `image/x-*` *only* when the byte-length check confirms a raw 8-bit
+    // layout. This prevents a raw RGB buffer that happens to start with
+    // a JPEG SOI marker (e.g. pixel value 0xFF 0xD8 0xFF) from being
+    // sniffed as JPEG. When the byte-length disagrees (encoded stream),
+    // sniff magic bytes; if no signature matches, fall back to
+    // application/octet-stream rather than guessing.
+    let format: PDFImage['format'];
+    if (isRawPixelLayout) {
+      format = canonicalizeImageFormat(undefined, image.channels);
+    } else {
+      format =
+        detectImageMimeFromMagicBytes(rawData) ?? 'application/octet-stream';
     }
 
     return {
@@ -545,6 +573,7 @@ export class UnpdfProvider extends BasePDFReader {
       width: image.width,
       height: image.height,
       channels: image.channels,
+      bitsPerComponent,
       format,
       pageNumber,
     };
@@ -623,6 +652,8 @@ export class UnpdfProvider extends BasePDFReader {
     const maxCollectedBytes = this.normalizeMaxCollectedImageBytes(
       options?.maxCollectedBytes,
     );
+    const outputFormat =
+      options?.outputFormat ?? DEFAULT_EXTRACT_IMAGES_OUTPUT_FORMAT;
     const allImages: PDFImage[] = [];
     let collectedBytes = 0;
 
@@ -639,6 +670,16 @@ export class UnpdfProvider extends BasePDFReader {
         const message = error instanceof Error ? error.message : String(error);
         throw new PDFBatchExtractionError(pages, message);
       }
+
+      // Re-encode to the requested web-safe format before any size
+      // accounting so the byte budget reflects what the caller will hold
+      // onto. WebP / JPEG outputs are typically 5-20x smaller than the
+      // raw RGB buffers, so the safety limit becomes more permissive.
+      images = await applyOutputFormat(
+        images,
+        outputFormat,
+        options?.encodingOptions,
+      );
 
       let nextCollectedBytes = collectedBytes;
 
@@ -709,6 +750,8 @@ export class UnpdfProvider extends BasePDFReader {
           document.numPages,
         );
         const images: PDFImage[] = [];
+        const outputFormat =
+          options?.outputFormat ?? DEFAULT_RENDER_PAGES_OUTPUT_FORMAT;
 
         for (const pageNumber of pagesToRender) {
           const page = await document.getPage(pageNumber);
@@ -727,11 +770,12 @@ export class UnpdfProvider extends BasePDFReader {
 
             images.push({
               data: this.rgbaToRgbBuffer(imageData.data),
-              format: 'rgb',
+              format: canonicalizeImageFormat(undefined, 3),
               pageNumber,
               width,
               height,
               channels: 3,
+              bitsPerComponent: 8,
             });
           } finally {
             page.cleanup();
@@ -740,7 +784,11 @@ export class UnpdfProvider extends BasePDFReader {
           }
         }
 
-        return images;
+        return applyOutputFormat(
+          images,
+          outputFormat,
+          options?.encodingOptions,
+        );
       } finally {
         await document.destroy();
       }

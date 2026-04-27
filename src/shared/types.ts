@@ -67,6 +67,17 @@ export interface RenderPagesOptions {
   outputFolder?: string;
   /** Whether to clean up rendered image files after processing */
   cleanupAfter?: boolean;
+  /**
+   * Re-encode rendered pages to a web-safe format.
+   *
+   * Defaults to `'original'` (raw 8-bit RGB pixels) because the OCR pipeline
+   * consumes raw pixel data and re-encoding adds overhead. Pass `'webp'`,
+   * `'png'`, or `'jpeg'` for callers that want to store or serve the
+   * rendered pages.
+   */
+  outputFormat?: PDFImageOutputFormat;
+  /** Encoding options applied when `outputFormat` is not `'original'`. */
+  encodingOptions?: ImageEncodingOptions;
 }
 
 /**
@@ -110,10 +121,73 @@ export interface PDFMetadata {
 
 /**
  * PDF image data that can be used for OCR processing
+ *
+ * The `format` field is set to a canonical lowercase IANA mime type so
+ * downstream consumers do not have to normalize provider-specific values.
+ *
+ * | Source                    | `format`                  |
+ * |---------------------------|---------------------------|
+ * | JPEG image stream         | `image/jpeg`              |
+ * | PNG image stream          | `image/png`               |
+ * | Re-encoded WebP output    | `image/webp`              |
+ * | Raw 8-bit RGB pixels      | `image/x-rgb`             |
+ * | Raw 8-bit RGBA pixels     | `image/x-rgba`            |
+ * | Raw 8-bit grayscale       | `image/x-grayscale`       |
+ * | Raw CMYK pixels           | `image/x-cmyk`            |
+ * | Unknown / unencoded blob  | `application/octet-stream`|
  */
 export interface PDFImage extends BaseOCRImage {
   /** Page number where the image was found (1-based) */
   pageNumber?: number;
+  /**
+   * Bits per channel sample. Common values: 1, 8, 16. Required for
+   * unambiguous decoding of raw pixel buffers, where
+   * `bytes.length === width * height * channels * (bitsPerComponent / 8)`.
+   *
+   * unpdf-extracted raw images are always 8-bit. For encoded outputs
+   * (`image/webp`, `image/png`, `image/jpeg`) this field is left unset
+   * because consumers should decode via the encoded format, not raw bytes.
+   *
+   * Mirrors the field added to `OCRImage` in @happyvertical/ocr (see
+   * https://github.com/happyvertical/ocr/issues/75); declaring it here
+   * keeps it available before the OCR field rolls out to consumers.
+   */
+  bitsPerComponent?: number;
+}
+
+/**
+ * Canonical IANA mime types emitted by `extractImages` / `renderPages`.
+ */
+export type PDFImageMimeType =
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/webp'
+  | 'image/tiff'
+  | 'image/x-rgb'
+  | 'image/x-rgba'
+  | 'image/x-grayscale'
+  | 'image/x-cmyk'
+  | 'application/octet-stream';
+
+/**
+ * Web-safe re-encoding target for extracted PDF images.
+ *
+ * `'original'` is the escape hatch: the extractor returns the raw stream
+ * (or a normalized raw RGB buffer) without re-encoding, suitable for
+ * downstream OCR pipelines that prefer raw pixel data.
+ */
+export type PDFImageOutputFormat = 'webp' | 'png' | 'jpeg' | 'original';
+
+/**
+ * Encoding options applied when `outputFormat` re-encodes raw image data.
+ *
+ * Defaults are tuned for storing extracted document images as web assets
+ * (small files, visually lossless): WebP quality 86, JPEG quality 85, PNG
+ * uses lossless encoding.
+ */
+export interface ImageEncodingOptions {
+  /** Quality for lossy formats (webp / jpeg). 0-100, default 86 (webp) / 85 (jpeg). */
+  quality?: number;
 }
 
 /**
@@ -159,6 +233,17 @@ export interface ExtractImagesOptions {
    * document's image bytes in memory.
    */
   onBatch?: (batch: PDFImageBatch) => void | Promise<void>;
+  /**
+   * Re-encode each extracted image to a web-safe format before returning it.
+   *
+   * Defaults to `'webp'` so callers can store or serve `image.data` directly
+   * without an external re-encoder. Pass `'original'` to receive the raw
+   * provider stream unchanged (raw RGB / CMYK / JPEG bytes), which is the
+   * lower-overhead path for downstream OCR.
+   */
+  outputFormat?: PDFImageOutputFormat;
+  /** Encoding options applied when `outputFormat` is not `'original'`. */
+  encodingOptions?: ImageEncodingOptions;
 }
 
 // Re-export OCR result type from the OCR package for backward compatibility

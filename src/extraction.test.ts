@@ -55,6 +55,61 @@ describe('PDF Content Extraction', () => {
     }
   });
 
+  it('should default extractImages to web-safe webp output (issue #73)', async () => {
+    // Default behavior: re-encode raw RGB streams to webp so callers can
+    // store / serve `image.data` directly.
+    const images = await unpdfReader.extractImages(pdfPath);
+
+    expect(images.length).toBe(3);
+    for (const image of images) {
+      expect(image.format).toBe('image/webp');
+      // WebP signature: bytes 0-3 = "RIFF", bytes 8-11 = "WEBP"
+      const buf = image.data as Buffer;
+      const header = buf.subarray(0, 4).toString('ascii');
+      const signature = buf.subarray(8, 12).toString('ascii');
+      expect(header).toBe('RIFF');
+      expect(signature).toBe('WEBP');
+      // Encoded outputs intentionally drop bitsPerComponent.
+      expect(image.bitsPerComponent).toBeUndefined();
+    }
+  });
+
+  it('should expose canonical mime types and bitsPerComponent on raw output (issues #73 + #74 + ocr#75)', async () => {
+    const images = await unpdfReader.extractImages(pdfPath, {
+      outputFormat: 'original',
+    });
+
+    expect(images.length).toBe(3);
+    for (const image of images) {
+      // Canonical IANA mime types only — no 'rgb', 'unknown', etc.
+      expect(image.format).toMatch(
+        /^(image\/x-rgb|image\/x-rgba|image\/x-grayscale|image\/x-cmyk|image\/jpeg|image\/png|application\/octet-stream)$/,
+      );
+      // Raw 8-bit pixel buffers carry bitsPerComponent so consumers can
+      // decode the buffer without guessing (ocr#75).
+      if (image.format?.startsWith('image/x-')) {
+        expect(image.bitsPerComponent).toBe(8);
+      }
+    }
+  });
+
+  it('should re-encode extractImages output to png on demand', async () => {
+    const images = await unpdfReader.extractImages(pdfPath, {
+      outputFormat: 'png',
+    });
+
+    expect(images.length).toBe(3);
+    for (const image of images) {
+      expect(image.format).toBe('image/png');
+      // PNG signature
+      const buf = image.data as Buffer;
+      expect(buf[0]).toBe(0x89);
+      expect(buf[1]).toBe(0x50);
+      expect(buf[2]).toBe(0x4e);
+      expect(buf[3]).toBe(0x47);
+    }
+  });
+
   it('should keep image extraction working with the auto reader', async () => {
     const images = await reader.extractImages(pdfPath);
 

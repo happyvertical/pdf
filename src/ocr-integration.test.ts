@@ -109,8 +109,16 @@ describe.skipIf(process.env.CI === 'true')(
         'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
       );
 
-      // Extract embedded images from the PDF using unpdf (modular workflow)
-      const images = await unpdfReader.extractImages(pdfPath);
+      // Extract embedded images from the PDF using unpdf (modular workflow).
+      //
+      // Pass `outputFormat: 'original'` so we keep the raw RGB fast path that
+      // OCR providers expect. The default for extractImages() is now
+      // 'webp' (issue #73) because most callers store the result as a web
+      // asset rather than feeding it back into OCR — consumers of the
+      // OCR-on-extracted-images flow opt into 'original' explicitly.
+      const images = await unpdfReader.extractImages(pdfPath, {
+        outputFormat: 'original',
+      });
 
       // Scanned PDF should have embedded images
       expect(images.length).toBeGreaterThan(0);
