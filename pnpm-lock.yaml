@@ -15,8 +15,8 @@ importers:
         specifier: ^0.60.33
         version: 0.60.33(ws@8.20.0)
       '@happyvertical/utils':
-        specifier: ^0.71.20
-        version: 0.71.20
+        specifier: ^0.74.0
+        version: 0.74.0
       '@napi-rs/canvas':
         specifier: 0.1.99
         version: 0.1.99
@@ -613,6 +613,10 @@ packages:
 
   '@happyvertical/utils@0.71.20':
     resolution: {integrity: sha512-5ZjBVRX9PyaATk6JLBkUZJnX8gyW76K0HfvQkOsFn1xnSsTHenOBsNDXct6L0HoaSTO4m6WQXoKSe2h/SPvc5A==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.71.20/3ca16b11c6716e9bfc05fec985a4e46c79ebafa3}
+    hasBin: true
+
+  '@happyvertical/utils@0.74.0':
+    resolution: {integrity: sha512-ISpYfLKevGWEC66zNY2PUbvRYO5SfY/itXwgRHXyMgAgpvf91Q/D16FHMx6kjhhnDI9HYDaz2kItYQEcXEmUqQ==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.74.0/46da7591856a126b7b0430fb1a9b65df2dcd9da5}
     hasBin: true
 
   '@img/sharp-darwin-arm64@0.33.5':
@@ -3563,6 +3567,13 @@ snapshots:
       - zod
 
   '@happyvertical/utils@0.71.20':
+    dependencies:
+      '@paralleldrive/cuid2': 3.3.0
+      date-fns: 4.1.0
+      pluralize: 8.0.0
+      uuid: 13.0.0
+
+  '@happyvertical/utils@0.74.0':
     dependencies:
       '@paralleldrive/cuid2': 3.3.0
       date-fns: 4.1.0

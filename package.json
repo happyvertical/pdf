@@ -57,7 +57,7 @@
   },
   "dependencies": {
     "@happyvertical/ocr": "^0.60.33",
-    "@happyvertical/utils": "^0.71.20",
+    "@happyvertical/utils": "^0.74.0",
     "@napi-rs/canvas": "0.1.99",
     "pdfjs-dist": "5.4.296",
     "unpdf": "^1.4.0"
