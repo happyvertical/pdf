@@ -1,12 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHtmlToPdf, resolveChromiumExecutablePath } from './index';
 
 const chromium = await resolveChromiumExecutablePath();
 
 describe('HTML to PDF rendering', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('resolves a chromium executable path or undefined', async () => {
     const path = await resolveChromiumExecutablePath();
     expect(path === undefined || typeof path === 'string').toBe(true);
+  });
+
+  it('ignores a stale PUPPETEER_EXECUTABLE_PATH instead of returning it', async () => {
+    vi.stubEnv('PUPPETEER_EXECUTABLE_PATH', '/nonexistent/chromium-binary');
+    const path = await resolveChromiumExecutablePath();
+    // Falls back to probing well-known locations; never reports the bogus path.
+    expect(path).not.toBe('/nonexistent/chromium-binary');
   });
 
   it('fails with a launch error when the executable path is bogus', async () => {

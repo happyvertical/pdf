@@ -104,22 +104,26 @@ const CHROMIUM_PROBE_PATHS = [
 /**
  * Locate a usable Chromium/Chrome binary.
  *
- * Honors `PUPPETEER_EXECUTABLE_PATH` first, then probes well-known install
- * locations. Returns `undefined` when nothing is found so callers can decide
- * whether that is fatal (`renderHtmlToPdf` treats it as fatal).
+ * Honors `PUPPETEER_EXECUTABLE_PATH` first — but only when the path actually
+ * exists, so a stale env var degrades to probing the well-known install
+ * locations instead of reporting a binary that will fail at launch. Returns
+ * `undefined` when nothing usable is found so callers can decide whether that
+ * is fatal (`renderHtmlToPdf` treats it as fatal).
  */
 export async function resolveChromiumExecutablePath(): Promise<
   string | undefined
 > {
-  const fromEnv = process.env.PUPPETEER_EXECUTABLE_PATH;
-  if (fromEnv) return fromEnv;
+  const candidates = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    ...CHROMIUM_PROBE_PATHS,
+  ].filter((path): path is string => Boolean(path));
 
-  for (const path of CHROMIUM_PROBE_PATHS) {
+  for (const path of candidates) {
     try {
       await access(path);
       return path;
     } catch {
-      // Probe the next well-known location.
+      // Probe the next candidate.
     }
   }
 
@@ -171,7 +175,11 @@ export async function renderHtmlToPdf(
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
     if (options.waitForFonts !== false) {
-      await page.evaluateHandle('document.fonts.ready');
+      // Await in-page so no JSHandle is created (nothing to dispose) and no
+      // FontFaceSet value crosses the protocol boundary.
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+      });
     }
     return await page.pdf({
       format: options.format,
