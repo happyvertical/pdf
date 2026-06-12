@@ -15,11 +15,7 @@
       "pdfjs-dist": "5.4.296"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "access": "public"
@@ -57,10 +53,11 @@
   },
   "dependencies": {
     "@happyvertical/ocr": "^0.60.33",
-    "@happyvertical/utils": "^0.71.20",
+    "@happyvertical/utils": "^0.74.6",
     "@napi-rs/canvas": "0.1.99",
     "pdfjs-dist": "5.4.296",
-    "unpdf": "^1.4.0"
+    "unpdf": "^1.4.0",
+    "puppeteer-core": "^25.1.0"
   },
   "optionalDependencies": {
     "@kreuzberg/node": "^4.1.1"

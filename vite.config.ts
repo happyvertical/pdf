@@ -58,6 +58,7 @@ export default defineConfig({
         '@napi-rs/canvas',
         '@kreuzberg/node',
         /^@kreuzberg\//,
+        'puppeteer-core',
 
         // SDK dependencies
         '@happyvertical/utils',
