@@ -47,6 +47,43 @@ export async function encodePDFImage(
   return mod.encodePDFImage(image, target, options);
 }
 
+export type {
+  HtmlToPdfFormat,
+  HtmlToPdfMargin,
+  HtmlToPdfOptions,
+} from './node/html-to-pdf';
+
+/**
+ * Render an HTML document to PDF bytes using a system Chromium.
+ *
+ * Generation counterpart to the extraction providers. See
+ * `src/node/html-to-pdf.ts` for the engine rationale (puppeteer-core, no
+ * config-loader chain) and runtime requirements (a Chromium binary in the
+ * image or `PUPPETEER_EXECUTABLE_PATH`).
+ *
+ * Node-only at runtime: the browser engine is loaded lazily so that importing
+ * `@happyvertical/pdf` never pulls browser automation code until you actually
+ * render.
+ */
+export async function renderHtmlToPdf(
+  html: string,
+  options?: import('./node/html-to-pdf').HtmlToPdfOptions,
+): Promise<Uint8Array> {
+  const mod = await import('./node/html-to-pdf');
+  return mod.renderHtmlToPdf(html, options);
+}
+
+/**
+ * Locate a usable Chromium/Chrome binary (`PUPPETEER_EXECUTABLE_PATH` first,
+ * then well-known install locations). Returns `undefined` when none is found.
+ */
+export async function resolveChromiumExecutablePath(): Promise<
+  string | undefined
+> {
+  const mod = await import('./node/html-to-pdf');
+  return mod.resolveChromiumExecutablePath();
+}
+
 // Legacy compatibility exports for backward compatibility with existing code
 import { getPDFReader, initializeProviders } from './shared/factory';
 
