@@ -59,6 +59,8 @@ export default defineConfig({
         '@kreuzberg/node',
         /^@kreuzberg\//,
         'puppeteer-core',
+        'pdf-lib',
+        'marked',
 
         // SDK dependencies
         '@happyvertical/utils',

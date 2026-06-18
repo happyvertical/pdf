@@ -53,6 +53,15 @@ export type {
   HtmlToPdfOptions,
 } from './node/html-to-pdf';
 
+// Markdown-to-PDF generation (pure JS, no headless browser).
+export {
+  PDFGenerationError,
+  type RenderMarkdownToPdfOptions,
+  type StyledRun,
+  flattenInlineTokens,
+  renderMarkdownToPdf,
+} from './generation/markdown-pdf';
+
 /**
  * Render an HTML document to PDF bytes using a system Chromium.
  *
