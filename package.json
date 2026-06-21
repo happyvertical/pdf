@@ -1,7 +1,7 @@
 {
   "name": "@happyvertical/pdf",
   "version": "0.65.0",
-  "description": "Modern PDF processing utilities with text extraction and OCR support using unpdf and @happyvertical/ocr",
+  "description": "Node.js PDF extraction, OCR fallback, image extraction, and PDF generation utilities",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +16,15 @@
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
+  "keywords": [
+    "pdf",
+    "ocr",
+    "text-extraction",
+    "pdf-generation",
+    "html-to-pdf",
+    "markdown-to-pdf",
+    "unpdf"
+  ],
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public"

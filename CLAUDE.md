@@ -2,13 +2,15 @@
 
 ## Purpose and Responsibilities
 
-The `@happyvertical/pdf` package provides comprehensive tools for working with PDF documents in Node.js environments, combining direct text extraction with intelligent OCR fallback. It focuses on:
+The `@happyvertical/pdf` package provides comprehensive tools for working with PDF documents in Node.js environments, combining direct text extraction, OCR fallback, image extraction, and PDF generation. It focuses on:
 
 - **Text Extraction**: Direct extraction from text-based PDFs using unpdf
 - **OCR Integration**: Automatic fallback to OCR for image-based/scanned PDFs via @happyvertical/ocr
 - **Smart Analysis**: Document analysis with processing strategy recommendations (text/ocr/hybrid)
 - **Metadata Extraction**: Comprehensive PDF metadata (title, author, dates, encryption status)
 - **Image Extraction**: Extract images for OCR processing or display
+- **Image Encoding**: Re-encode extracted images to web-safe formats
+- **PDF Generation**: Render Markdown or HTML documents to PDF bytes
 - **Error Resilience**: Graceful handling of corrupted, malformed, or encrypted PDFs
 
 This package is particularly useful for AI agents that need to analyze document content, extract information from diverse PDF formats, and intelligently handle both text-based and image-based documents.
@@ -18,8 +20,9 @@ This package is particularly useful for AI agents that need to analyze document 
 ## Current Implementation Status
 
 - **Node.js**: ✅ Fully implemented with unpdf + OCR integration
-- **Browser**: ⚠️ Planned for future releases (PDF.js provider stubbed but not implemented)
-- **Environment Detection**: ✅ Automatic provider selection based on runtime
+- **PDF Generation**: ✅ Markdown generation via pdf-lib; HTML generation via system Chromium and puppeteer-core
+- **Browser**: ⚠️ Internal provider code exists, but the public npm export is still Node-first and does not expose a stable browser entry point
+- **Environment Detection**: ✅ Automatic provider selection for supported Node.js providers
 
 ## Key APIs
 
@@ -33,13 +36,13 @@ const reader = await getPDFReader();
 
 // Get reader with specific configuration
 const reader = await getPDFReader({
-  provider: 'auto',       // 'auto', 'unpdf', 'pdfjs'
+  provider: 'auto',       // 'auto', 'unpdf', 'kreuzberg'
   enableOCR: true,        // Enable OCR fallback
   timeout: 30000,         // Processing timeout
   maxFileSize: 50 * 1024 * 1024 // 50MB limit
 });
 
-// NEW: Analyze PDF before processing for optimal strategy
+// Analyze PDF before processing for optimal strategy
 const info = await reader.getInfo('/path/to/document.pdf');
 console.log('PDF Analysis:', {
   pageCount: info.pageCount,
@@ -129,7 +132,8 @@ The @happyvertical/pdf package supports configuration via environment variables 
 |---------------------|------|-------------|---------|
 | `HAVE_PDF_ENABLE_OCR` | boolean | Enable OCR fallback for image-based PDFs | `true`, `false`, `1`, `0`, `yes`, `no` |
 | `HAVE_PDF_TIMEOUT` | number | Processing timeout in milliseconds | `30000`, `60000` |
-| `HAVE_PDF_PROVIDER` | string | PDF provider to use | `unpdf`, `pdfjs`, `auto` |
+| `HAVE_PDF_PROVIDER` | string | PDF provider to use | `auto`, `unpdf`, `kreuzberg` |
+| `HAVE_PDF_OCR_PROVIDER` | string | OCR provider to use | `auto`, `tesseract`, `onnx` |
 | `HAVE_PDF_MAX_FILE_SIZE` | number | Maximum file size in bytes | `52428800` (50MB) |
 
 #### Usage Examples
@@ -140,7 +144,7 @@ import { getPDFReader } from '@happyvertical/pdf';
 // Set environment variables (in .env file or shell)
 // HAVE_PDF_ENABLE_OCR=true
 // HAVE_PDF_TIMEOUT=30000
-// HAVE_PDF_PROVIDER=unpdf
+// HAVE_PDF_PROVIDER=auto
 
 // Create reader using environment variables
 const reader = await getPDFReader();
@@ -274,7 +278,7 @@ import {
 
 // Check available providers in current environment
 const providers = getAvailableProviders();
-console.log('Available providers:', providers); // ['unpdf'] in Node.js, [] in other environments
+console.log('Available providers:', providers); // ['kreuzberg', 'unpdf'] in Node.js
 
 // Check specific provider availability
 const isUnpdfAvailable = isProviderAvailable('unpdf');
@@ -284,10 +288,10 @@ const providerInfo = await getProviderInfo('unpdf');
 console.log('Provider capabilities:', providerInfo.capabilities);
 console.log('Dependencies status:', providerInfo.dependencies);
 
-// Create reader (auto-selects unpdf in Node.js)
+// Create reader (auto-selects the combined Node reader in Node.js)
 const reader = await getPDFReader({ provider: 'auto' }); // Recommended approach
 
-// Force specific provider (Node.js only currently)
+// Force a specific Node provider
 try {
   const unpdfReader = await getPDFReader({ provider: 'unpdf' });
 } catch (error) {
@@ -383,14 +387,21 @@ src/
 ├── shared/
 │   ├── types.ts            # Comprehensive TypeScript interfaces and error classes
 │   ├── base.ts             # BasePDFReader abstract class (ENOTSUP pattern)
+│   ├── image-format.ts     # Canonical image format normalization
 │   └── factory.ts          # getPDFReader() factory with auto-detection
+├── generation/
+│   └── markdown-pdf.ts     # Pure-JS Markdown-to-PDF renderer
 ├── node/
 │   ├── unpdf.ts            # UnpdfProvider - direct PDF processing
-│   └── combined.ts         # CombinedNodeProvider - unpdf + OCR integration
+│   ├── combined.ts         # CombinedNodeProvider - unpdf + OCR integration
+│   ├── image-encoding.ts   # Web-safe image encoding
+│   ├── html-to-pdf.ts      # HTML-to-PDF using system Chromium
+│   ├── child-extraction.ts # Large-document child-process extraction
+│   └── kreuzberg.ts        # Optional @kreuzberg/node provider
 └── browser/
-    ├── pdfjs.ts            # PDF.js provider (planned, not implemented)
-    ├── combined.ts         # Browser combined provider (planned)
-    └── factory.ts          # Browser factory (planned)
+    ├── pdfjs.ts            # Internal PDF.js provider
+    ├── combined.ts         # Internal browser combined provider
+    └── factory.ts          # Internal browser factory
 ```
 
 ### Key Classes and Their Roles
@@ -413,7 +424,12 @@ src/
    - `extractText()` with automatic OCR fallback (unless `skipOCRFallback: true`)
    - Combines capabilities from both unpdf and OCR providers
 
-4. **Factory Functions** (`src/shared/factory.ts`)
+4. **Generation Utilities**
+   - `renderMarkdownToPdf()` builds PDF bytes with pdf-lib and marked
+   - `renderHtmlToPdf()` uses puppeteer-core against a caller-provided Chromium
+   - Both are exported from `src/index.ts`; HTML rendering stays lazily imported
+
+5. **Factory Functions** (`src/shared/factory.ts`)
    - `getPDFReader()` - Main entry point, auto-detects environment
    - `getAvailableProviders()` - Returns available providers for current environment
    - `isProviderAvailable()` - Check specific provider availability
@@ -433,21 +449,38 @@ All types are defined in `src/shared/types.ts`:
 ### Runtime Dependencies
 
 1. **unpdf** (external, npm)
-   - Version: ^1.0.6
+   - Version: ^1.4.0
    - Purpose: PDF parsing, text extraction, metadata, image extraction
    - Node.js only, lazy-loaded for performance
    - Used by: `UnpdfProvider`
 
-2. **@happyvertical/ocr** (internal workspace)
-   - Version: workspace:*
+2. **@happyvertical/ocr**
+   - Version: ^0.60.33
    - Purpose: OCR processing with multiple provider support
    - Provides: OCR factory, language support, image preprocessing
    - Used by: `CombinedNodeProvider`
 
+3. **pdf-lib + marked**
+   - Purpose: Pure-JS Markdown-to-PDF rendering
+   - Used by: `renderMarkdownToPdf()`
+
+4. **puppeteer-core**
+   - Purpose: HTML-to-PDF rendering against a system Chromium
+   - Used by: `renderHtmlToPdf()`
+
+5. **@napi-rs/canvas**
+   - Purpose: Re-encode extracted images to WebP, PNG, or JPEG
+   - Used by: `encodePDFImage()` and `extractImages({ outputFormat })`
+
+6. **@kreuzberg/node** (optional dependency)
+   - Purpose: Optional memory-efficient PDF/OCR backend
+   - Used by: `KreuzbergProvider`
+
 ### System Requirements
 
-- **Node.js 18+** (Node.js 24+ recommended)
+- **Node.js 24+**
 - **Memory**: 2GB+ recommended for OCR processing
+- **Chromium/Chrome**: Required only for `renderHtmlToPdf()`
 - **OCR Dependencies**: Managed by @happyvertical/ocr (see @happyvertical/ocr documentation)
 
 ### Dependency Validation Pattern
@@ -787,33 +820,26 @@ src/
 ### Running Tests
 
 ```bash
-npm test                    # Run all tests
-npm run test:watch         # Watch mode for development
+pnpm test                   # Run all tests
+pnpm test:watch             # Watch mode for development
 
 # Specific test suites
-npx vitest run --grep "factory"      # Factory tests
-npx vitest run --grep "extraction"   # Extraction tests
-npx vitest run --grep "ocr"          # OCR tests
+pnpm exec vitest run --grep "factory"      # Factory tests
+pnpm exec vitest run --grep "extraction"   # Extraction tests
+pnpm exec vitest run --grep "ocr"          # OCR tests
 
 # Extended timeout for OCR tests
-npx vitest run --testTimeout 60000
+pnpm exec vitest run --testTimeout 60000
 ```
 
 ### Build Commands
 
 ```bash
-npm run build              # Build Node.js bundle
-npm run build:watch        # Watch mode for development
-npm run clean              # Clean dist/ and docs/
-npm run clean:all          # Clean everything including node_modules
-npm run dev                # Run build:watch + test:watch in parallel
-```
-
-### Documentation Generation
-
-```bash
-npm run docs               # Generate markdown docs to docs/
-npm run docs:watch         # Watch mode for docs generation
+pnpm build                 # Build Node.js bundle
+pnpm build:watch           # Watch mode for development
+pnpm clean                 # Clean dist/ and TypeScript build info
+pnpm dev                   # Run build:watch + test:watch in parallel
+pnpm pack --dry-run        # Inspect package contents before publishing
 ```
 
 ## Important Gotchas and Considerations
@@ -957,13 +983,12 @@ const text = await reader.extractText(pdf, { pages: [1, 2, 3] });
 
 ### 10. Browser Support Status
 
-**Current Status**: Browser providers are stubbed but not implemented.
+**Current Status**: The public npm package is Node-first. Internal browser
+provider files exist under `src/browser/`, but `package.json` only exports the
+main entry point and does not expose a stable browser condition or subpath.
 
 ```typescript
-// This will throw in browser environments
-const reader = await getPDFReader(); // Error: Unable to detect environment
-
-// Workaround: Use only in Node.js environments
+// Supported public path today: Node.js runtimes
 if (typeof process !== 'undefined' && process.versions?.node) {
   const reader = await getPDFReader();
 }
@@ -1000,43 +1025,17 @@ console.log(text.length); // Exact
 
 ## API Documentation
 
-The @happyvertical/pdf package generates comprehensive API documentation in both HTML and markdown formats using TypeDoc:
+This standalone repository does not currently define TypeDoc scripts or ship a
+generated `docs/` directory. The public docs are:
 
-### Generated Documentation Formats
+1. `README.md` for package-level installation, requirements, examples, and
+   operational caveats.
+2. TypeScript declarations generated by `pnpm build` under `dist/**/*.d.ts`.
+3. Inline JSDoc in `src/shared/types.ts`, `src/shared/factory.ts`,
+   `src/node/html-to-pdf.ts`, and `src/generation/markdown-pdf.ts`.
 
-**HTML Documentation** (recommended for browsing):
-- Generated in `docs/` directory for public website
-- Full API reference with interactive navigation
-- Cross-linked type definitions and examples
-- Accessible via development server at `http://localhost:3030/`
-
-**Markdown Documentation** (great for development):
-- Generated in `packages/pdf/docs/` directory
-- Markdown format perfect for IDE integration
-- Accessible via development server at `http://localhost:3030/packages/pdf/`
-
-### Generating Documentation
-
-```bash
-# Generate documentation for this package
-npm run docs
-
-# Generate and watch for changes during development
-npm run docs:watch
-
-# Start development server to browse documentation
-npm run dev  # Serves docs at http://localhost:3030
-```
-
-### Development Workflow
-
-Documentation is automatically generated during the build process and can be viewed alongside development:
-
-1. **During Development**: Use `npm run docs:watch` to regenerate docs as you code
-2. **Local Browsing**: Access HTML docs at `http://localhost:3030/` or markdown at `http://localhost:3030/packages/pdf/`
-3. **IDE Integration**: Point your editor to `packages/pdf/docs/` for offline markdown reference
-
-The documentation includes complete API coverage, usage examples, and cross-references to related HAVE SDK packages.
+When adding public APIs, update the README and JSDoc in the same change, then
+run `pnpm build` so the published declaration files reflect the new surface.
 
 ## Documentation Links
 
@@ -1049,18 +1048,18 @@ Always reference the latest documentation when implementing PDF processing solut
   - Check for new extraction features and performance improvements
   - Monitor for additional format support and edge case handling
 
-### Internal Dependencies
+### HappyVertical Dependencies
 
-- **@happyvertical/ocr**: Internal workspace package providing OCR capabilities
-  - Managed through workspace dependencies
-  - Supports multiple OCR providers (tesseract.js, EasyOCR)
-  - See @happyvertical/ocr package documentation for detailed OCR capabilities
+- **@happyvertical/ocr**: [GitHub Repository](https://github.com/happyvertical/ocr)
+  - Provides OCR abstraction and provider selection
+  - Current docs describe Tesseract.js and ONNX-based OCR engines
+  - Check provider availability and language support before changing OCR flows
 
-### Future Browser Support (Planned)
+### Browser/Rendering Dependencies
 
 - **PDF.js**: [Official Documentation](https://mozilla.github.io/pdf.js/) | [GitHub Repository](https://github.com/mozilla/pdf.js)
-  - Mozilla's PDF rendering engine (planned for future browser support)
-  - Will provide browser-native PDF processing capabilities
+  - Mozilla's PDF rendering engine
+  - Used indirectly by `unpdf` / `pdfjs-dist` and internal browser provider code
 
 ### Expert Agent Instructions
 
@@ -1181,8 +1180,9 @@ const deps = await reader.checkDependencies();
 
 // PDFReaderOptions
 {
-  provider?: 'unpdf' | 'pdfjs' | 'auto';  // Default: 'auto'
+  provider?: 'unpdf' | 'kreuzberg' | 'pdfjs' | 'auto';  // Default: 'auto'
   enableOCR?: boolean;                     // Default: true
+  ocrProvider?: string;                    // 'auto', 'tesseract', 'onnx'
   defaultOCROptions?: OCROptions;
   maxFileSize?: number;                    // In bytes
   timeout?: number;                        // In milliseconds
