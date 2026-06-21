@@ -46,12 +46,15 @@
   },
   "scripts": {
     "test": "vitest run --testTimeout 120000",
+    "test:coverage": "vitest run --coverage --testTimeout 120000",
     "test:watch": "vitest --testTimeout 120000",
     "build": "vite build",
     "build:watch": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write src/",
+    "docs:api": "typedoc --options typedoc.json",
+    "docs:api:check": "tsx scripts/check-generated-api-docs.ts",
     "clean": "rm -rf dist *.tsbuildinfo",
     "dev": "npm run build:watch & npm run test:watch",
     "changeset": "changeset",
@@ -67,8 +70,8 @@
     "marked": "^14.1.4",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "5.4.296",
-    "unpdf": "^1.4.0",
-    "puppeteer-core": "^25.1.0"
+    "puppeteer-core": "^25.1.0",
+    "unpdf": "^1.4.0"
   },
   "optionalDependencies": {
     "@kreuzberg/node": "^4.1.1"
@@ -79,8 +82,10 @@
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@types/node": "24.12.2",
+    "@vitest/coverage-v8": "^4.0.15",
     "lefthook": "^1.11.13",
     "tsx": "^4.20.0",
+    "typedoc": "^0.28.19",
     "typescript": "^5.9.3",
     "vite": "7.3.2",
     "vite-plugin-dts": "4.5.4",

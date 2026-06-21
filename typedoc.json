@@ -1,0 +1,20 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "entryPointStrategy": "resolve",
+  "out": "docs/api",
+  "readme": "none",
+  "name": "@happyvertical/pdf API Reference",
+  "includeVersion": true,
+  "gitRevision": "main",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeExternals": true,
+  "treatWarningsAsErrors": true,
+  "requiredToBeDocumented": ["Class", "Interface", "Function", "TypeAlias"],
+  "navigationLinks": {
+    "GitHub": "https://github.com/happyvertical/pdf",
+    "npm": "https://www.npmjs.com/package/@happyvertical/pdf"
+  }
+}

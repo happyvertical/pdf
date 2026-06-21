@@ -59,9 +59,11 @@ export abstract class BasePDFReader implements PDFReader {
    * @throws {PDFUnsupportedError} When provider doesn't support text extraction
    */
   async extractText(
-    _source: PDFSource,
-    _options?: ExtractTextOptions,
+    source: PDFSource,
+    options?: ExtractTextOptions,
   ): Promise<string | null> {
+    void source;
+    void options;
     throw new PDFUnsupportedError(`extractText (provider: ${this.name})`);
   }
 
@@ -75,7 +77,8 @@ export abstract class BasePDFReader implements PDFReader {
    * @returns Promise resolving to PDF metadata object
    * @throws {PDFUnsupportedError} When provider doesn't support metadata extraction
    */
-  async extractMetadata(_source: PDFSource): Promise<PDFMetadata> {
+  async extractMetadata(source: PDFSource): Promise<PDFMetadata> {
+    void source;
     throw new PDFUnsupportedError(`extractMetadata (provider: ${this.name})`);
   }
 
@@ -86,13 +89,16 @@ export abstract class BasePDFReader implements PDFReader {
    * should override this method to provide image extraction functionality.
    *
    * @param source - PDF source data (file path, ArrayBuffer, or Uint8Array)
+   * @param options - Optional image extraction configuration
    * @returns Promise resolving to array of extracted image objects
    * @throws {PDFUnsupportedError} When provider doesn't support image extraction
    */
   async extractImages(
-    _source: PDFSource,
-    _options?: ExtractImagesOptions,
+    source: PDFSource,
+    options?: ExtractImagesOptions,
   ): Promise<PDFImage[]> {
+    void source;
+    void options;
     throw new PDFUnsupportedError(`extractImages (provider: ${this.name})`);
   }
 
@@ -108,9 +114,11 @@ export abstract class BasePDFReader implements PDFReader {
    * @throws {PDFUnsupportedError} When provider doesn't support page rendering
    */
   async renderPages(
-    _source: PDFSource,
-    _options?: import('./types.js').RenderPagesOptions,
+    source: PDFSource,
+    options?: import('./types.js').RenderPagesOptions,
   ): Promise<PDFImage[]> {
+    void source;
+    void options;
     throw new PDFUnsupportedError(`renderPages (provider: ${this.name})`);
   }
 
@@ -126,9 +134,11 @@ export abstract class BasePDFReader implements PDFReader {
    * @throws {PDFUnsupportedError} When provider doesn't support OCR operations
    */
   async performOCR(
-    _images: PDFImage[],
-    _options?: OCROptions,
+    images: PDFImage[],
+    options?: OCROptions,
   ): Promise<OCRResult> {
+    void images;
+    void options;
     throw new PDFUnsupportedError(`performOCR (provider: ${this.name})`);
   }
 
@@ -178,7 +188,8 @@ export abstract class BasePDFReader implements PDFReader {
    * @returns Promise resolving to document analysis and strategy recommendations
    * @throws {PDFUnsupportedError} When provider doesn't support document analysis
    */
-  async getInfo(_source: PDFSource): Promise<PDFInfo> {
+  async getInfo(source: PDFSource): Promise<PDFInfo> {
+    void source;
     throw new PDFUnsupportedError(`getInfo (provider: ${this.name})`);
   }
 

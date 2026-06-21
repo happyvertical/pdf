@@ -95,14 +95,16 @@ export interface StyledRun {
 }
 
 /**
- * A minimal subset of a `marked` inline token. Declared locally so this module
- * does not depend on marked's exported token unions (which churn across
- * versions) — we only read the fields we render.
+ * Minimal inline token shape accepted by `flattenInlineTokens()`.
+ *
+ * This intentionally mirrors only the stable fields the renderer consumes from
+ * `marked` tokens, so callers can test or transform inline content without
+ * depending on marked's full token union.
  */
-interface InlineToken {
+export interface MarkdownInlineToken {
   type: string;
   text?: string;
-  tokens?: InlineToken[];
+  tokens?: MarkdownInlineToken[];
 }
 
 /**
@@ -115,7 +117,7 @@ interface InlineToken {
  * Exported and pure so it can be unit-tested directly without rendering a PDF.
  */
 export function flattenInlineTokens(
-  tokens: InlineToken[] | undefined,
+  tokens: MarkdownInlineToken[] | undefined,
   inherited: { bold?: boolean; italic?: boolean } = {},
 ): StyledRun[] {
   const runs: StyledRun[] = [];
@@ -341,7 +343,7 @@ function renderHeading(
   layout: Layout,
   fonts: FontSet,
   depth: number,
-  tokens: InlineToken[] | undefined,
+  tokens: MarkdownInlineToken[] | undefined,
 ): void {
   const style = HEADING_STYLES[depth] ?? HEADING_STYLES[6];
   const runs = flattenInlineTokens(tokens).map((r) => ({ ...r, bold: true }));
@@ -357,7 +359,7 @@ function renderHeading(
 function renderParagraph(
   layout: Layout,
   fonts: FontSet,
-  tokens: InlineToken[] | undefined,
+  tokens: MarkdownInlineToken[] | undefined,
   indent = 0,
 ): void {
   const runs = flattenInlineTokens(tokens);
@@ -371,7 +373,11 @@ function renderParagraph(
 }
 
 interface ListItemToken {
-  tokens?: Array<{ type: string; tokens?: InlineToken[]; text?: string }>;
+  tokens?: Array<{
+    type: string;
+    tokens?: MarkdownInlineToken[];
+    text?: string;
+  }>;
 }
 
 function renderList(
@@ -506,7 +512,7 @@ interface BlockToken {
   ordered?: boolean;
   start?: number | string;
   items?: ListItemToken[];
-  tokens?: InlineToken[];
+  tokens?: MarkdownInlineToken[];
 }
 
 function renderBlockquote(

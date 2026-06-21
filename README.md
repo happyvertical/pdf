@@ -267,12 +267,17 @@ pnpm build
 pnpm typecheck
 pnpm lint
 pnpm test
+pnpm test:coverage
+pnpm docs:api
+pnpm docs:api:check
 pnpm pack --dry-run
 ```
 
 The package ships generated JavaScript and declaration files from `dist/`.
 Run `pnpm build` to refresh the declarations before inspecting the full API
-surface locally.
+surface locally. The generated API reference lives in `docs/api/`; run
+`pnpm docs:api` after changing public exports or JSDoc, and run
+`pnpm docs:api:check` to verify the committed reference is current.
 
 ## License
 
