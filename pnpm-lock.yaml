@@ -643,19 +643,19 @@ packages:
     resolution: {integrity: sha512-Ej6hHQSrBLCY74Qb2rRYZ0v97kp3h1Q8obLdQDM208ft9BOyqj+aUN2yTYQ/1c/BO695OWDgufRSiWiLB92KLw==}
 
   '@happyvertical/ai@0.71.20':
-    resolution: {integrity: sha512-sn/y1wFoHimKuUiTjZZwd0CsakWYGzKien80J3ngV99whkd8Kglb9pzT+ihi/IldNJwlFLf8ZujBgdn5VZBlfw==}
+    resolution: {integrity: sha512-sn/y1wFoHimKuUiTjZZwd0CsakWYGzKien80J3ngV99whkd8Kglb9pzT+ihi/IldNJwlFLf8ZujBgdn5VZBlfw==, tarball: https://npm.pkg.github.com/download/@happyvertical/ai/0.71.20/27b4fc0eb1b21f04958d5d579d1860a37888a1b9}
     hasBin: true
 
   '@happyvertical/ocr@0.60.33':
-    resolution: {integrity: sha512-uMXObBBKcN8D8E/XTi6dS/R4EtuBHxK/35cmEyG874x2umg5vyXo+Ss+tSJlOryFw9f1Y0LDPXtqckMxJ6ecrQ==}
+    resolution: {integrity: sha512-uMXObBBKcN8D8E/XTi6dS/R4EtuBHxK/35cmEyG874x2umg5vyXo+Ss+tSJlOryFw9f1Y0LDPXtqckMxJ6ecrQ==, tarball: https://npm.pkg.github.com/download/@happyvertical/ocr/0.60.33/dd3de5edd1ff28cb222b0564df0f8f80f8768a1a}
     engines: {node: '>=24', pnpm: '>=9'}
 
   '@happyvertical/utils@0.71.20':
-    resolution: {integrity: sha512-5ZjBVRX9PyaATk6JLBkUZJnX8gyW76K0HfvQkOsFn1xnSsTHenOBsNDXct6L0HoaSTO4m6WQXoKSe2h/SPvc5A==}
+    resolution: {integrity: sha512-5ZjBVRX9PyaATk6JLBkUZJnX8gyW76K0HfvQkOsFn1xnSsTHenOBsNDXct6L0HoaSTO4m6WQXoKSe2h/SPvc5A==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.71.20/3ca16b11c6716e9bfc05fec985a4e46c79ebafa3}
     hasBin: true
 
   '@happyvertical/utils@0.74.6':
-    resolution: {integrity: sha512-L7ok/WCfzMJhAgu9C7e1n+34L2BMQ0yee/+TOdqhjOeU6tQRix285DI63J7eWytQaYKy9Wmgfwxmw2dBwCrMLg==}
+    resolution: {integrity: sha512-L7ok/WCfzMJhAgu9C7e1n+34L2BMQ0yee/+TOdqhjOeU6tQRix285DI63J7eWytQaYKy9Wmgfwxmw2dBwCrMLg==, tarball: https://npm.pkg.github.com/download/@happyvertical/utils/0.74.6/b05cca1b2027f420dcb9e7c8b29bb61f499e9df3}
     hasBin: true
 
   '@img/sharp-darwin-arm64@0.33.5':

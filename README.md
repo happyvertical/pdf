@@ -29,6 +29,15 @@ but the public package export does not expose a stable browser entry point yet.
 
 ## Installation
 
+`@happyvertical/pdf` is still published through GitHub Packages because its
+runtime OCR dependencies are also HappyVertical packages. Configure the
+`@happyvertical` scope and authenticate with a token that can read the package
+before installing:
+
+```bash
+npm config set @happyvertical:registry https://npm.pkg.github.com
+```
+
 ```bash
 pnpm add @happyvertical/pdf
 npm install @happyvertical/pdf

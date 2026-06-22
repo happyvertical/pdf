@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
   pull-requests: write
 
 jobs:
@@ -29,7 +30,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: 'https://npm.pkg.github.com'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
@@ -49,6 +50,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate branch commit messages
         env:
@@ -104,7 +107,7 @@ jobs:
             1. Tests run on main branch
             2. The squash commit message is validated
             3. Version is bumped automatically
-            4. Package is published to npm
+            4. Package is published to GitHub Packages
             5. Git tag is created
 
             No manual intervention needed.`;
