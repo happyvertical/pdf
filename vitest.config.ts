@@ -21,6 +21,9 @@ export default defineConfig({
         'src/**/*.test.ts',
         'src/**/*.spec.ts',
         'src/browser/**',
+        // The HTML adapter depends on a system Chromium binary and its tests
+        // are skipped on CI runners without one.
+        'src/node/html-to-pdf.ts',
         'src/node/extract-worker.ts',
       ],
       thresholds: {
