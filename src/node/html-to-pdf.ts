@@ -47,6 +47,14 @@ export interface HtmlToPdfMargin {
   right?: string;
 }
 
+/**
+ * Options controlling Chromium-backed HTML-to-PDF rendering.
+ *
+ * Defaults are tuned for server/container runtimes: CSS page size wins,
+ * backgrounds print, fonts are awaited, and Chromium launches with
+ * container-safe sandbox flags. Provide `executablePath` when Chromium is not
+ * installed in one of the standard probe locations.
+ */
 export interface HtmlToPdfOptions {
   /**
    * Chromium/Chrome binary to launch. Defaults to

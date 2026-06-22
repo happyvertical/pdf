@@ -1,10 +1,10 @@
 /**
- * @happyvertical/pdf - Canonical image format normalization (browser-safe).
+ * @happyvertical/pdf - Canonical image format normalization.
  *
- * Issue #74: producer-side `format` values vary wildly (`'rgb'`, `'image/jpg'`,
- * `'image/x-png'`, `'application/octet-stream'`, etc.). This module returns
- * the canonical lowercase IANA mime type so consumers don't all reinvent the
- * same normalizer.
+ * Producer-side `format` values vary widely (`'rgb'`, `'image/jpg'`,
+ * `'image/x-png'`, `'application/octet-stream'`, etc.). This module returns a
+ * canonical lowercase IANA mime type so consumers don't all reinvent the same
+ * normalizer.
  *
  * This file deliberately has no Node-only dependencies so it can be
  * imported from the shared entry point and the browser bundle alike.
@@ -60,8 +60,7 @@ export function canonicalizeImageFormat(
       // Idempotent: an explicit `application/octet-stream` is a
       // deliberate "we don't know" / "opaque blob" signal from the
       // upstream extractor. Don't try to upgrade it to a raw `image/x-*`
-      // mime via channel inference — that's exactly the mis-labelling
-      // pdf#74 (and the PR #75 review) calls out.
+      // mime via channel inference.
       return 'application/octet-stream';
     default:
       // Fall through to channel inference for unknown / empty labels.
@@ -77,11 +76,10 @@ export function canonicalizeImageFormat(
 /**
  * Detect a canonical IANA mime type from a buffer's magic bytes.
  *
- * Used to disambiguate buffers from upstream extractors that don't tell
- * us whether they're raw pixels or an encoded stream (issue #74). When
- * unpdf returns `channels: 3` plus a buffer that starts with the JPEG
- * SOI marker, the buffer is JPEG and labelling it `image/x-rgb` would
- * mis-route downstream consumers.
+ * Used to disambiguate buffers from upstream extractors that don't tell us
+ * whether they're raw pixels or an encoded stream. When unpdf returns
+ * `channels: 3` plus a buffer that starts with the JPEG SOI marker, the buffer
+ * is JPEG and labeling it `image/x-rgb` would mis-route downstream consumers.
  *
  * Returns `undefined` when no signature matches, so callers can fall
  * back to channel-based inference.

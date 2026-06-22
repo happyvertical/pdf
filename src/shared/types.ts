@@ -148,9 +148,8 @@ export interface PDFImage extends BaseOCRImage {
    * (`image/webp`, `image/png`, `image/jpeg`) this field is left unset
    * because consumers should decode via the encoded format, not raw bytes.
    *
-   * Mirrors the field added to `OCRImage` in @happyvertical/ocr (see
-   * https://github.com/happyvertical/ocr/issues/75); declaring it here
-   * keeps it available before the OCR field rolls out to consumers.
+   * Mirrors the OCR image field used by downstream OCR providers so consumers
+   * can decode raw buffers without ambiguous channel-depth heuristics.
    */
   bitsPerComponent?: number;
 }
@@ -648,9 +647,7 @@ export interface PDFReader {
  */
 export type PDFSource = string | ArrayBuffer | Uint8Array;
 
-/**
- * Error types specific to PDF processing
- */
+/** Base class for typed errors thrown by this package. */
 export class PDFError extends Error {
   constructor(
     message: string,
@@ -661,6 +658,13 @@ export class PDFError extends Error {
   }
 }
 
+/**
+ * Thrown when the selected provider cannot perform the requested operation.
+ *
+ * For example, browser PDF.js image extraction is not equivalent to Node.js
+ * `unpdf` image extraction, so unsupported operations fail with this typed
+ * error instead of returning misleading partial results.
+ */
 export class PDFUnsupportedError extends PDFError {
   constructor(operation: string) {
     super(`Operation '${operation}' is not supported by this PDF reader`);
@@ -669,6 +673,12 @@ export class PDFUnsupportedError extends PDFError {
   }
 }
 
+/**
+ * Thrown when a required runtime dependency is unavailable.
+ *
+ * The message includes the missing dependency name and, when available, the
+ * lower-level load or capability-check failure.
+ */
 export class PDFDependencyError extends PDFError {
   constructor(dependency: string, details?: string) {
     super(
@@ -679,6 +689,12 @@ export class PDFDependencyError extends PDFError {
   }
 }
 
+/**
+ * Thrown when an input PDF exceeds the configured `maxFileSize`.
+ *
+ * The `actualSizeBytes` and `maxSizeBytes` fields are exposed so callers can
+ * report precise limits or decide whether to retry with a higher trusted limit.
+ */
 export class PDFFileSizeError extends PDFError {
   constructor(
     public actualSizeBytes: number,
@@ -692,6 +708,12 @@ export class PDFFileSizeError extends PDFError {
   }
 }
 
+/**
+ * Thrown when one page batch fails during large-document extraction.
+ *
+ * The `pages` field identifies the page batch that failed so callers can retry
+ * or report partial progress without treating the result as complete success.
+ */
 export class PDFBatchExtractionError extends PDFError {
   constructor(
     public pages: number[],
@@ -709,6 +731,12 @@ export class PDFBatchExtractionError extends PDFError {
   }
 }
 
+/**
+ * Thrown when collected image extraction would retain too much image data.
+ *
+ * Use `extractImages(source, { onBatch, collect: false })` for large or
+ * image-heavy PDFs so each batch can be persisted or OCRed incrementally.
+ */
 export class PDFImageCollectionLimitError extends PDFError {
   constructor(
     public actualSizeBytes: number,
@@ -724,6 +752,12 @@ export class PDFImageCollectionLimitError extends PDFError {
   }
 }
 
+/**
+ * Thrown when OCR fallback is required but page rendering or recognition fails.
+ *
+ * The optional `pages` field identifies the page set involved in the fallback
+ * failure when the provider can report it.
+ */
 export class PDFOCRFallbackError extends PDFError {
   constructor(
     message: string,

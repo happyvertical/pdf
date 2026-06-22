@@ -3,9 +3,34 @@
  */
 
 import { loadEnvConfig } from '@happyvertical/utils';
-import type { PDFReader, PDFReaderOptions } from './types';
+import type {
+  DependencyCheckResult,
+  PDFCapabilities,
+  PDFReader,
+  PDFReaderOptions,
+} from './types';
 
 type RuntimeProvider = NonNullable<PDFReaderOptions['provider']>;
+
+/**
+ * Diagnostic information for a PDF provider.
+ *
+ * Returned by `getProviderInfo()` so applications can inspect availability,
+ * capability support, and missing dependency details before selecting a
+ * provider for a document-processing workflow.
+ */
+export interface PDFProviderInfo {
+  /** Provider name that was requested. */
+  provider: string;
+  /** Whether the provider is available in the current runtime. */
+  available: boolean;
+  /** Provider capabilities when available; otherwise null. */
+  capabilities: PDFCapabilities | null;
+  /** Dependency status when the provider could be constructed; otherwise null. */
+  dependencies: DependencyCheckResult | null;
+  /** Error message explaining why provider inspection failed. */
+  error?: string;
+}
 
 async function isKreuzbergAvailable(): Promise<boolean> {
   try {
@@ -369,7 +394,9 @@ export function isProviderAvailable(provider: string): boolean {
  * }
  * ```
  */
-export async function getProviderInfo(provider: string) {
+export async function getProviderInfo(
+  provider: string,
+): Promise<PDFProviderInfo> {
   try {
     if (!isRuntimeProvider(provider)) {
       throw new Error(`Unknown PDF provider: ${provider}`);

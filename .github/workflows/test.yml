@@ -56,5 +56,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Run tests
-        run: pnpm test
+      - name: Check API docs
+        run: pnpm docs:api:check
+
+      - name: Run tests with coverage
+        run: pnpm test:coverage

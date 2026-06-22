@@ -90,6 +90,9 @@ jobs:
       - name: Version packages
         run: pnpm run changeset:version
 
+      - name: Regenerate API docs
+        run: pnpm docs:api
+
       - name: Check for version changes
         id: version-check
         run: |

@@ -13,5 +13,25 @@ export default defineConfig({
         singleFork: true,
       },
     },
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'lcov'],
+      include: ['src/**/*.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/*.spec.ts',
+        'src/browser/**',
+        // The HTML adapter depends on a system Chromium binary and its tests
+        // are skipped on CI runners without one.
+        'src/node/html-to-pdf.ts',
+        'src/node/extract-worker.ts',
+      ],
+      thresholds: {
+        statements: 80,
+        branches: 65,
+        functions: 80,
+        lines: 80,
+      },
+    },
   },
 });

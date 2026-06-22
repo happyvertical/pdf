@@ -1,8 +1,8 @@
 /**
- * @happyvertical/pdf - Shared entry point with automatic environment detection
+ * Public entry point for Node.js PDF processing and generation utilities.
  *
- * This entry point automatically detects the runtime environment and provides
- * the appropriate PDF processing capabilities for both Node.js and browser environments.
+ * The stable package surface is Node-first. It exposes extraction, OCR,
+ * image-encoding, Markdown-to-PDF, and HTML-to-PDF helpers from one ESM entry.
  */
 
 // Re-export base provider for custom implementations
@@ -17,8 +17,8 @@ export {
 } from './shared/factory';
 export * from './shared/types';
 
-// Pure helper — safe in any environment. Use this when you only need to
-// normalize a `format` string to a canonical IANA mime type per issue #74.
+// Pure helper, safe in any environment. Use this when you only need to
+// normalize a `format` string to a canonical IANA mime type.
 export { canonicalizeImageFormat } from './shared/image-format';
 
 import type {
@@ -30,9 +30,9 @@ import type {
 /**
  * Re-encode an already-extracted `PDFImage` to a web-safe format.
  *
- * Companion to `extractImages({ outputFormat })` (issue #73). Use this when
- * the original extraction returned `outputFormat: 'original'` and the
- * caller now wants a web-safe asset.
+ * Companion to `extractImages({ outputFormat })`. Use this when the original
+ * extraction returned `outputFormat: 'original'` and the caller now wants a
+ * web-safe asset.
  *
  * Node-only at runtime: the encoder is loaded lazily so that importing
  * `@happyvertical/pdf` from a browser context does not pull in
@@ -56,6 +56,7 @@ export type {
 // Markdown-to-PDF generation (pure JS, no headless browser).
 export {
   PDFGenerationError,
+  type MarkdownInlineToken,
   type RenderMarkdownToPdfOptions,
   type StyledRun,
   flattenInlineTokens,
@@ -65,10 +66,10 @@ export {
 /**
  * Render an HTML document to PDF bytes using a system Chromium.
  *
- * Generation counterpart to the extraction providers. See
- * `src/node/html-to-pdf.ts` for the engine rationale (puppeteer-core, no
- * config-loader chain) and runtime requirements (a Chromium binary in the
- * image or `PUPPETEER_EXECUTABLE_PATH`).
+ * Generation counterpart to the extraction providers. Uses `puppeteer-core`
+ * without downloading a browser, so callers must provide a Chromium binary in
+ * the image, through `PUPPETEER_EXECUTABLE_PATH`, or through
+ * `options.executablePath`.
  *
  * Node-only at runtime: the browser engine is loaded lazily so that importing
  * `@happyvertical/pdf` never pulls browser automation code until you actually
@@ -109,8 +110,10 @@ export async function extractTextFromPDF(
 
 /**
  * Extract images from all pages of a PDF file (legacy compatibility)
+ *
+ * Requires the unpdf provider; kreuzberg integrates OCR into extractText().
+ *
  * @deprecated Use getPDFReader().extractImages() instead
- * @note Requires unpdf provider - kreuzberg integrates OCR into extractText()
  */
 export async function extractImagesFromPDF(
   pdfPath: string,
@@ -123,8 +126,10 @@ export async function extractImagesFromPDF(
 
 /**
  * Perform OCR on image data (legacy compatibility)
+ *
+ * Requires the unpdf provider; kreuzberg integrates OCR into extractText().
+ *
  * @deprecated Use getPDFReader().performOCR() instead
- * @note Requires unpdf provider - kreuzberg integrates OCR into extractText()
  */
 export async function performOCROnImages(
   images: PDFImage[],
