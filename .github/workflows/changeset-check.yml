@@ -51,16 +51,60 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+
+          changeset_count=$(find .changeset -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l)
+          releaseable_commit_count=$(
+            git log "$MERGE_BASE..$HEAD_SHA" --pretty=format:%s --no-merges |
+              grep -Ec '^[a-z]+(\([^)]+\))?!:|^(feat|fix|perf)(\([^)]+\))?:|^chore\(deps\):' ||
+              true
+          )
+          release_sensitive_paths=$(
+            git diff --name-only "$MERGE_BASE..$HEAD_SHA" -- \
+              README.md \
+              docs/api \
+              package.json \
+              pnpm-lock.yaml \
+              scripts/check-generated-api-docs.ts \
+              src \
+              typedoc.json |
+              grep -Ev '(^|/)[^/]+\.(test|spec)\.tsx?$' ||
+              true
+          )
+
           # Skip if PR has 'skip-changeset' label
           PR_NUM="${{ github.event.pull_request.number }}"
           if gh pr view "$PR_NUM" --json labels \
              --jq '.labels[].name' | grep -q 'skip-changeset'; then
+            if [ "$changeset_count" -gt 0 ]; then
+              echo "ERROR: PR has the skip-changeset label and a changeset."
+              echo "Remove the label or delete the changeset so release intent is unambiguous."
+              exit 1
+            fi
+
+            if [ "$releaseable_commit_count" -gt 0 ]; then
+              echo "ERROR: PR has the skip-changeset label but contains releaseable commits."
+              echo "Remove the label, or rewrite the releaseable commits if no release is intended."
+              exit 1
+            fi
+
+            if [ -n "$release_sensitive_paths" ]; then
+              echo "ERROR: PR has the skip-changeset label but changes package or public docs files:"
+              printf '%s\n' "$release_sensitive_paths" | sed 's/^/  /'
+              echo ""
+              echo "Remove the label and use a releaseable PR title or add an explicit changeset."
+              exit 1
+            fi
+
             echo "Skipping changeset check (skip-changeset label present)"
             exit 0
           fi
 
           # Skip if PR is from changeset-release branch (automated version packages PR)
-          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
           if echo "$PR_BRANCH" | grep -q '^changeset-release/'; then
             echo "Skipping changeset check (changesets release PR from $PR_BRANCH)"
             exit 0
@@ -73,7 +117,6 @@ jobs:
           fi
 
           # Skip if PR title starts with 'chore: version packages' or 'chore(release):'
-          PR_TITLE="${{ github.event.pull_request.title }}"
           if echo "$PR_TITLE" | grep -qiE '^chore(\(release\))?:.*version'; then
             echo "Skipping changeset check (version packages PR)"
             exit 0
@@ -97,9 +140,6 @@ jobs:
 
           echo "PR title will not trigger an automatic release on squash merge"
           echo ""
-
-          # Check if changeset files exist (excluding README.md)
-          changeset_count=$(find .changeset -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l)
 
           if [ "$changeset_count" -eq 0 ]; then
             echo "No changeset found"
