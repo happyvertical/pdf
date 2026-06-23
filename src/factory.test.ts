@@ -196,6 +196,92 @@ describe('PDF Factory Tests', () => {
     expect(reader.normalizeSource).toHaveBeenCalledTimes(1);
   });
 
+  it('should map Kreuzberg metadata fields from extracted buffers', async () => {
+    const reader = new KreuzbergProvider() as any;
+
+    reader.loadKreuzberg = vi.fn().mockResolvedValue({
+      extractBytes: vi.fn().mockResolvedValue({
+        metadata: {
+          pageCount: 3,
+          title: 'Quarterly Report',
+          author: 'HappyVertical',
+          creationDate: '2026-01-02T03:04:05.000Z',
+          modificationDate: '2026-01-03T04:05:06.000Z',
+          isEncrypted: true,
+          version: '1.7',
+        },
+      }),
+    });
+
+    await expect(
+      reader.extractMetadata(new Uint8Array([1, 2, 3])),
+    ).resolves.toMatchObject({
+      pageCount: 3,
+      title: 'Quarterly Report',
+      author: 'HappyVertical',
+      encrypted: true,
+      version: '1.7',
+    });
+  });
+
+  it('should report unavailable Kreuzberg dependencies without throwing', async () => {
+    const reader = new KreuzbergProvider() as any;
+
+    reader.loadKreuzberg = vi
+      .fn()
+      .mockRejectedValue(new Error('native module unavailable'));
+
+    await expect(reader.checkDependencies()).resolves.toMatchObject({
+      available: false,
+      error: 'Kreuzberg dependency not available: native module unavailable',
+      details: {
+        kreuzberg: false,
+      },
+    });
+  });
+
+  it('should report Kreuzberg capabilities from dependency checks', async () => {
+    const reader = new KreuzbergProvider({
+      maxFileSize: 64,
+    });
+
+    const depsSpy = vi
+      .spyOn(reader, 'checkDependencies')
+      .mockResolvedValueOnce({
+        available: true,
+        details: {
+          kreuzberg: true,
+          ocrBackend: 'tesseract',
+        },
+      });
+
+    try {
+      await expect(reader.checkCapabilities()).resolves.toMatchObject({
+        canExtractText: true,
+        canExtractMetadata: true,
+        canExtractImages: false,
+        canPerformOCR: true,
+        maxFileSize: 64,
+      });
+    } finally {
+      depsSpy.mockRestore();
+    }
+  });
+
+  it('should reject standalone image and OCR operations for Kreuzberg', async () => {
+    const reader = new KreuzbergProvider();
+
+    await expect(reader.extractImages(Buffer.from('pdf'))).rejects.toThrow(
+      'Kreuzberg handles OCR internally',
+    );
+    await expect(reader.renderPages(Buffer.from('pdf'))).rejects.toThrow(
+      'Kreuzberg handles page rendering internally',
+    );
+    await expect(reader.performOCR([])).rejects.toThrow(
+      'Kreuzberg integrates OCR into extractText',
+    );
+  });
+
   describe('Environment Variable Configuration', () => {
     const originalEnv = process.env;
 
