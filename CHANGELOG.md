@@ -1,5 +1,11 @@
 # @happyvertical/pdf
 
+## 0.65.1
+
+### Patch Changes
+
+- 939b715: Release the documentation, API reference, and CI gating updates.
+
 ## 0.65.0
 
 ### Minor Changes
