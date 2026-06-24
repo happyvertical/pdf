@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { getPDFReader } from './index';
 import type { PDFReader } from './shared/types';
 
-const OCR_TEST_TIMEOUT_MS = 120000;
+const OCR_TEST_TIMEOUT_MS = process.env.CI === 'true' ? 240000 : 120000;
 
 describe('PDF Content Extraction', () => {
   let reader: PDFReader;
