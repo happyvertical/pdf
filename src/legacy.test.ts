@@ -9,7 +9,7 @@ import {
   performOCROnImages,
 } from './index';
 
-const OCR_TEST_TIMEOUT_MS = 120000;
+const OCR_TEST_TIMEOUT_MS = process.env.CI === 'true' ? 240000 : 120000;
 
 describe('Legacy Compatibility Functions', () => {
   it(
