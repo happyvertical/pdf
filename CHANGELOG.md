@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.65.2
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - publish to npmjs (pdf)
+
 ## 0.65.1
 
 ### Patch Changes
