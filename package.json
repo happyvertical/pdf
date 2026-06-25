@@ -15,11 +15,7 @@
       "pdfjs-dist": "5.4.296"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
   "keywords": [
     "pdf",
     "ocr",
@@ -68,7 +64,7 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
-    "@happyvertical/ocr": "^0.60.52",
+    "@happyvertical/ocr": "^0.60.53",
     "@happyvertical/utils": "^0.74.9",
     "@napi-rs/canvas": "0.1.99",
     "marked": "^14.1.4",

@@ -350,6 +350,42 @@ describe('CombinedNodeProvider', () => {
     );
   });
 
+  it('renders automatic OCR fallback pages as PNG images', async () => {
+    const reader = new CombinedNodeProvider() as any;
+
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue(''),
+      getInfo: vi.fn().mockResolvedValue({ pageCount: 1 }),
+      renderPages: vi.fn().mockResolvedValue([
+        {
+          data: Buffer.from([1]),
+          format: 'image/png',
+          width: 10,
+          height: 10,
+          pageNumber: 1,
+        },
+      ]),
+    };
+    reader.ocrFactory = {
+      performOCR: vi.fn().mockResolvedValue({
+        text: 'recognized text',
+        confidence: 95,
+      }),
+    };
+
+    await expect(reader.extractText('/tmp/scanned.pdf')).resolves.toBe(
+      'recognized text',
+    );
+    expect(reader.unpdfProvider.renderPages).toHaveBeenCalledWith(
+      '/tmp/scanned.pdf',
+      expect.objectContaining({
+        outputFormat: 'png',
+        scale: 2,
+        throwOnError: true,
+      }),
+    );
+  });
+
   it('throws an explicit OCR fallback error when rendered OCR returns no text', async () => {
     const reader = new CombinedNodeProvider() as any;
 
