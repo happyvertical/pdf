@@ -1,5 +1,11 @@
 # @happyvertical/pdf
 
+## 0.65.3
+
+### Patch Changes
+
+- a6b3a97: Render automatic OCR fallback pages as PNG before passing them to OCR providers so image-only PDFs extract text reliably.
+
 ## 0.65.2
 
 ### Patch Changes
