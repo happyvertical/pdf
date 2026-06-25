@@ -320,6 +320,9 @@ export class CombinedNodeProvider extends BasePDFReader {
       scale: 2.0,
       throwOnError: true,
       pages,
+      // Tesseract handles encoded images reliably; raw RGB page renders can
+      // produce empty text for image-only PDFs.
+      outputFormat: 'png',
     });
 
     if (!renderedPages.length) {
