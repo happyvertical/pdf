@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "packageManager": "pnpm@10.33.2",
+  "packageManager": "pnpm@10.34.4",
   "engines": {
     "node": ">=24",
     "pnpm": ">=9"
@@ -70,7 +70,7 @@
   "dependencies": {
     "@happyvertical/ocr": "^0.60.53",
     "@happyvertical/utils": "^0.74.9",
-    "@napi-rs/canvas": "0.1.99",
+    "@napi-rs/canvas": "0.1.100",
     "marked": "^14.1.4",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "5.4.296",
@@ -85,13 +85,13 @@
     "@changesets/cli": "^2.29.8",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
-    "@types/node": "24.12.2",
+    "@types/node": "24.13.2",
     "@vitest/coverage-v8": "^4.0.15",
     "lefthook": "^1.11.13",
     "tsx": "^4.20.0",
     "typedoc": "^0.28.19",
     "typescript": "^5.9.3",
-    "vite": "7.3.2",
+    "vite": "7.3.6",
     "vite-plugin-dts": "4.5.4",
     "vitest": "^4.0.8"
   }
