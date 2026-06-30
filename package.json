@@ -70,7 +70,7 @@
   "dependencies": {
     "@happyvertical/ocr": "^0.60.53",
     "@happyvertical/utils": "^0.74.9",
-    "@napi-rs/canvas": "0.1.99",
+    "@napi-rs/canvas": "1.0.2",
     "marked": "^14.1.4",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "5.4.296",
