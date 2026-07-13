@@ -69,7 +69,6 @@ jobs:
             git diff --name-only "$MERGE_BASE..$HEAD_SHA" -- \
               README.md \
               docs/api \
-              package.json \
               pnpm-lock.yaml \
               scripts/check-generated-api-docs.ts \
               src \
@@ -77,6 +76,12 @@ jobs:
               grep -Ev '(^|/)[^/]+\.(test|spec)\.tsx?$' ||
               true
           )
+          if ! diff -q \
+            <(git show "$MERGE_BASE:package.json" | node -e 'const fs = require("node:fs"); console.log(JSON.stringify(JSON.parse(fs.readFileSync(0, "utf8"))))') \
+            <(git show "$HEAD_SHA:package.json" | node -e 'const fs = require("node:fs"); console.log(JSON.stringify(JSON.parse(fs.readFileSync(0, "utf8"))))') \
+            >/dev/null; then
+            release_sensitive_paths="${release_sensitive_paths}${release_sensitive_paths:+$'\n'}package.json"
+          fi
 
           # Skip if PR has 'skip-changeset' label
           PR_NUM="${{ github.event.pull_request.number }}"
