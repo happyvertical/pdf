@@ -15,11 +15,7 @@
       "pdfjs-dist": "5.4.296"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
   "keywords": [
     "pdf",
     "ocr",
