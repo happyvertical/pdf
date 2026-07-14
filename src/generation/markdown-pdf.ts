@@ -24,8 +24,8 @@ import {
   PDFDocument,
   type PDFFont,
   type PDFPage,
-  StandardFonts,
   rgb,
+  StandardFonts,
 } from 'pdf-lib';
 import { PDFError } from '../shared/types';
 
