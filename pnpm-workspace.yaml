@@ -1,2 +1,13 @@
 packages:
   - "."
+
+allowBuilds:
+  esbuild: false
+  lefthook: false
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false
+  tesseract.js: false
+
+overrides:
+  pdfjs-dist: 5.4.296

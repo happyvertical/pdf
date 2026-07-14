@@ -8,11 +8,10 @@ export default defineConfig({
     testTimeout: 120000,
     hookTimeout: 60000,
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    // Vitest 4 pool rework: poolOptions.forks.singleFork was removed;
+    // run test files sequentially in a single fork via top-level options.
+    maxWorkers: 1,
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'lcov'],
