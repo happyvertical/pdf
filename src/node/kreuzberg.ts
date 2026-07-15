@@ -229,7 +229,7 @@ export class KreuzbergProvider extends BasePDFReader {
         );
       }
 
-      if (!result || !result.content) {
+      if (!result?.content) {
         return null;
       }
 
