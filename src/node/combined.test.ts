@@ -432,27 +432,26 @@ describe('CombinedNodeProvider', () => {
   it.each([
     { pages: [] as number[], label: 'empty' },
     { pages: [99], label: 'out-of-range' },
-  ])(
-    'returns null for $label OCR fallback pages without rendering',
-    async ({ pages }) => {
-      const reader = new CombinedNodeProvider() as any;
+  ])('returns null for $label OCR fallback pages without rendering', async ({
+    pages,
+  }) => {
+    const reader = new CombinedNodeProvider() as any;
 
-      reader.unpdfProvider = {
-        extractText: vi.fn().mockResolvedValue(''),
-        getInfo: vi.fn().mockResolvedValue({ pageCount: 2 }),
-        renderPages: vi.fn(),
-      };
-      reader.ocrFactory = {
-        performOCR: vi.fn(),
-      };
+    reader.unpdfProvider = {
+      extractText: vi.fn().mockResolvedValue(''),
+      getInfo: vi.fn().mockResolvedValue({ pageCount: 2 }),
+      renderPages: vi.fn(),
+    };
+    reader.ocrFactory = {
+      performOCR: vi.fn(),
+    };
 
-      await expect(
-        reader.extractText('/tmp/scanned.pdf', { pages }),
-      ).resolves.toBeNull();
-      expect(reader.unpdfProvider.renderPages).not.toHaveBeenCalled();
-      expect(reader.ocrFactory.performOCR).not.toHaveBeenCalled();
-    },
-  );
+    await expect(
+      reader.extractText('/tmp/scanned.pdf', { pages }),
+    ).resolves.toBeNull();
+    expect(reader.unpdfProvider.renderPages).not.toHaveBeenCalled();
+    expect(reader.ocrFactory.performOCR).not.toHaveBeenCalled();
+  });
 
   it('surfaces OCR fallback rendering failures instead of returning null', async () => {
     const reader = new CombinedNodeProvider() as any;

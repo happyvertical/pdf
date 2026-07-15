@@ -15,11 +15,10 @@ export {
   initializeProviders,
   isProviderAvailable,
 } from './shared/factory';
-export * from './shared/types';
-
 // Pure helper, safe in any environment. Use this when you only need to
 // normalize a `format` string to a canonical IANA mime type.
 export { canonicalizeImageFormat } from './shared/image-format';
+export * from './shared/types';
 
 import type {
   ImageEncodingOptions,
@@ -47,21 +46,20 @@ export async function encodePDFImage(
   return mod.encodePDFImage(image, target, options);
 }
 
+// Markdown-to-PDF generation (pure JS, no headless browser).
+export {
+  flattenInlineTokens,
+  type MarkdownInlineToken,
+  PDFGenerationError,
+  type RenderMarkdownToPdfOptions,
+  renderMarkdownToPdf,
+  type StyledRun,
+} from './generation/markdown-pdf';
 export type {
   HtmlToPdfFormat,
   HtmlToPdfMargin,
   HtmlToPdfOptions,
 } from './node/html-to-pdf';
-
-// Markdown-to-PDF generation (pure JS, no headless browser).
-export {
-  PDFGenerationError,
-  type MarkdownInlineToken,
-  type RenderMarkdownToPdfOptions,
-  type StyledRun,
-  flattenInlineTokens,
-  renderMarkdownToPdf,
-} from './generation/markdown-pdf';
 
 /**
  * Render an HTML document to PDF bytes using a system Chromium.

@@ -6,11 +6,11 @@ import { promises as fs } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { Canvas } from '@napi-rs/canvas';
 import type {
   CanvasRenderingContext2D as NapiCanvasRenderingContext2D,
   SKRSContext2D,
 } from '@napi-rs/canvas';
+import { Canvas } from '@napi-rs/canvas';
 import type {
   DocumentInitParameters,
   PDFPageProxy,
