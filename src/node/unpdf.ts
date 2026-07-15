@@ -6,10 +6,6 @@ import { promises as fs } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type {
-  CanvasRenderingContext2D as NapiCanvasRenderingContext2D,
-  SKRSContext2D,
-} from '@napi-rs/canvas';
 import { Canvas } from '@napi-rs/canvas';
 import type {
   DocumentInitParameters,
@@ -51,6 +47,7 @@ const IMAGE_EXTRACTION_BATCH_SIZE = 4;
 const DEFAULT_MAX_COLLECTED_IMAGE_BYTES = 128 * 1024 * 1024;
 
 type UnpdfModule = typeof import('unpdf');
+type PdfjsModule = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
 type UnpdfDocumentProxy = Awaited<ReturnType<UnpdfModule['getDocumentProxy']>>;
 type UnpdfExtractedImage = {
   data: Buffer | Uint8Array | Uint8ClampedArray | ArrayBuffer;
@@ -59,7 +56,21 @@ type UnpdfExtractedImage = {
   channels?: number;
 };
 type TextMarkedContent = { type: string; id: string };
-type NodeRenderableContext = NapiCanvasRenderingContext2D | SKRSContext2D;
+type PdfjsCanvasAndContext = {
+  canvas: unknown;
+  context: {
+    getImageData(
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+    ): { data: Uint8ClampedArray };
+  };
+};
+type PdfjsCanvasFactory = {
+  create(width: number, height: number): PdfjsCanvasAndContext;
+  destroy(canvasAndContext: PdfjsCanvasAndContext): void;
+};
 type PDFMetadataInfo = Record<string, unknown>;
 type PdfjsDocumentOptions = Pick<DocumentInitParameters, 'useWorkerFetch'> &
   Partial<Pick<DocumentInitParameters, 'standardFontDataUrl' | 'wasmUrl'>>;
@@ -73,12 +84,11 @@ function readTextItem(item: TextItem | TextMarkedContent): string {
 
 function createNodeRenderParameters(
   page: PDFPageProxy,
-  canvasContext: NodeRenderableContext,
+  canvas: unknown,
   scale: number,
 ): RenderParameters {
   return {
-    canvas: null,
-    canvasContext: canvasContext as unknown as CanvasRenderingContext2D,
+    canvas: canvas as HTMLCanvasElement,
     viewport: page.getViewport({ scale }),
   };
 }
@@ -215,7 +225,7 @@ export class UnpdfProvider extends BasePDFReader {
   }
 
   private async ensurePdfjsWorkerConfigured() {
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdfjs = await this.loadPdfjs();
     const workerPath = require.resolve(
       'pdfjs-dist/legacy/build/pdf.worker.mjs',
     );
@@ -227,6 +237,10 @@ export class UnpdfProvider extends BasePDFReader {
       pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
       this.configuredPdfjsWorkerSrc = workerSrc;
     }
+  }
+
+  private loadPdfjs(): Promise<PdfjsModule> {
+    return import('pdfjs-dist/legacy/build/pdf.mjs');
   }
 
   private async verifyRenderDependencies() {
@@ -732,19 +746,25 @@ export class UnpdfProvider extends BasePDFReader {
 
     try {
       await this.ensurePdfjsWorkerConfigured();
-      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const pdfjs = await this.loadPdfjs();
       const buffer = await this.normalizeSource(source);
 
       if (!this.validatePDFData(buffer)) {
         throw new Error('Invalid PDF data');
       }
 
-      const document = await pdfjs.getDocument({
-        data: buffer,
+      // PDF.js transfers the provided array to its worker. Clone caller-owned
+      // in-memory sources so rendering does not detach their backing buffer.
+      const documentData =
+        typeof source === 'string' ? buffer : new Uint8Array(buffer);
+      const loadingTask = pdfjs.getDocument({
+        data: documentData,
         ...this.getPdfjsDocumentOptions(true),
-      }).promise;
+      });
 
       try {
+        const document = await loadingTask.promise;
+        const canvasFactory = document.canvasFactory as PdfjsCanvasFactory;
         const pagesToRender = this.normalizePages(
           options?.pages,
           document.numPages,
@@ -759,11 +779,13 @@ export class UnpdfProvider extends BasePDFReader {
           const viewport = page.getViewport({ scale });
           const width = Math.ceil(viewport.width);
           const height = Math.ceil(viewport.height);
-          const canvas = new Canvas(width, height);
-          const context = canvas.getContext('2d');
+          // Use PDF.js's own factory so the Canvas and global Path2D originate
+          // from the same @napi-rs/canvas major installed with pdfjs-dist.
+          const canvasAndContext = canvasFactory.create(width, height);
+          const { canvas, context } = canvasAndContext;
 
           try {
-            await page.render(createNodeRenderParameters(page, context, scale))
+            await page.render(createNodeRenderParameters(page, canvas, scale))
               .promise;
 
             const imageData = context.getImageData(0, 0, width, height);
@@ -779,8 +801,7 @@ export class UnpdfProvider extends BasePDFReader {
             });
           } finally {
             page.cleanup();
-            canvas.width = 0;
-            canvas.height = 0;
+            canvasFactory.destroy(canvasAndContext);
           }
         }
 
@@ -790,7 +811,7 @@ export class UnpdfProvider extends BasePDFReader {
           options?.encodingOptions,
         );
       } finally {
-        await document.destroy();
+        await loadingTask.destroy();
       }
     } catch (error) {
       const message = formatPdfOcrRuntimeIssue(error);

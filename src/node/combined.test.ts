@@ -432,26 +432,27 @@ describe('CombinedNodeProvider', () => {
   it.each([
     { pages: [] as number[], label: 'empty' },
     { pages: [99], label: 'out-of-range' },
-  ])('returns null for $label OCR fallback pages without rendering', async ({
-    pages,
-  }) => {
-    const reader = new CombinedNodeProvider() as any;
+  ])(
+    'returns null for $label OCR fallback pages without rendering',
+    async ({ pages }) => {
+      const reader = new CombinedNodeProvider() as any;
 
-    reader.unpdfProvider = {
-      extractText: vi.fn().mockResolvedValue(''),
-      getInfo: vi.fn().mockResolvedValue({ pageCount: 2 }),
-      renderPages: vi.fn(),
-    };
-    reader.ocrFactory = {
-      performOCR: vi.fn(),
-    };
+      reader.unpdfProvider = {
+        extractText: vi.fn().mockResolvedValue(''),
+        getInfo: vi.fn().mockResolvedValue({ pageCount: 2 }),
+        renderPages: vi.fn(),
+      };
+      reader.ocrFactory = {
+        performOCR: vi.fn(),
+      };
 
-    await expect(
-      reader.extractText('/tmp/scanned.pdf', { pages }),
-    ).resolves.toBeNull();
-    expect(reader.unpdfProvider.renderPages).not.toHaveBeenCalled();
-    expect(reader.ocrFactory.performOCR).not.toHaveBeenCalled();
-  });
+      await expect(
+        reader.extractText('/tmp/scanned.pdf', { pages }),
+      ).resolves.toBeNull();
+      expect(reader.unpdfProvider.renderPages).not.toHaveBeenCalled();
+      expect(reader.ocrFactory.performOCR).not.toHaveBeenCalled();
+    },
+  );
 
   it('surfaces OCR fallback rendering failures instead of returning null', async () => {
     const reader = new CombinedNodeProvider() as any;
@@ -1031,6 +1032,66 @@ describe('UnpdfProvider', () => {
       }),
     ).rejects.toBeInstanceOf(PDFOCRFallbackError);
     expect(reader.ensurePdfjsWorkerConfigured).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    {
+      label: 'Buffer',
+      createSource: () => Buffer.from('%PDF-1.7\n'),
+    },
+    {
+      label: 'Uint8Array',
+      createSource: () => new Uint8Array(Buffer.from('%PDF-1.7\n')),
+    },
+  ])(
+    'preserves caller-owned $label render sources',
+    async ({ createSource }) => {
+      const reader = new UnpdfProvider() as any;
+      const source = createSource();
+      const expected = Buffer.from(source);
+      const destroy = vi.fn().mockResolvedValue(undefined);
+      const getDocument = vi.fn().mockImplementation(({ data }) => {
+        data.fill(0);
+        return {
+          promise: Promise.resolve({ numPages: 0 }),
+          destroy,
+        };
+      });
+
+      reader.ensurePdfjsWorkerConfigured = vi.fn().mockResolvedValue(undefined);
+      reader.loadPdfjs = vi.fn().mockResolvedValue({ getDocument });
+
+      await expect(reader.renderPages(source)).resolves.toEqual([]);
+
+      expect(Buffer.from(source)).toEqual(expected);
+      expect(destroy).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('destroys the PDF.js loading task when document loading fails', async () => {
+    const reader = new UnpdfProvider() as any;
+    const destroy = vi.fn().mockResolvedValue(undefined);
+    const getDocument = vi.fn().mockReturnValue({
+      promise: Promise.reject(new Error('damaged xref')),
+      destroy,
+    });
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    reader.ensurePdfjsWorkerConfigured = vi.fn().mockResolvedValue(undefined);
+    reader.loadPdfjs = vi.fn().mockResolvedValue({ getDocument });
+
+    try {
+      await expect(
+        reader.renderPages(Buffer.from('%PDF-1.7\nbroken'), {
+          throwOnError: true,
+        }),
+      ).rejects.toBeInstanceOf(PDFOCRFallbackError);
+      expect(destroy).toHaveBeenCalledOnce();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('preserves page and image order across collected image batches', async () => {

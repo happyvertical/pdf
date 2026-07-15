@@ -55,6 +55,50 @@ describe('PDF Content Extraction', () => {
     }
   });
 
+  it('should render PDF pages for OCR fallback (unpdf)', async () => {
+    const pages = await unpdfReader.renderPages(pdfPath, {
+      pages: [1],
+      scale: 1,
+      outputFormat: 'png',
+      throwOnError: true,
+    });
+
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toMatchObject({
+      format: 'image/png',
+      pageNumber: 1,
+    });
+    expect(pages[0]?.width).toBeGreaterThan(0);
+    expect(pages[0]?.height).toBeGreaterThan(0);
+    expect(Buffer.from(pages[0]?.data ?? []).subarray(0, 4)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    );
+  });
+
+  it('should render vector PDF pages with PDF.js native canvas types', async () => {
+    const vectorPdfPath = join(
+      fileURLToPath(new URL('.', import.meta.url)),
+      '..',
+      'test',
+      'Agenda-Package-October-24-2023-Regular-Council-Meeting.pdf',
+    );
+    const pages = await unpdfReader.renderPages(vectorPdfPath, {
+      pages: [1],
+      scale: 0.5,
+      outputFormat: 'png',
+      throwOnError: true,
+    });
+
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toMatchObject({
+      format: 'image/png',
+      pageNumber: 1,
+    });
+    expect(Buffer.from(pages[0]?.data ?? []).subarray(0, 4)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    );
+  });
+
   it('should default extractImages to web-safe webp output (issue #73)', async () => {
     // Default behavior: re-encode raw RGB streams to webp so callers can
     // store / serve `image.data` directly.
