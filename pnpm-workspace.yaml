@@ -19,4 +19,6 @@ minimumReleaseAgeExclude:
   - '@biomejs/cli-linux-x64@2.5.4'
   - '@biomejs/cli-win32-arm64@2.5.4'
   - '@biomejs/cli-win32-x64@2.5.4'
-  - '@happyvertical/utils@0.80.0'
+  - '@happyvertical/utils@0.80.0 || 0.80.1'
+  - '@happyvertical/ai@0.80.0 || 0.80.1'
+  - '@happyvertical/ocr@0.61.1'

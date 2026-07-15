@@ -63,8 +63,8 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
-    "@happyvertical/ocr": "^0.60.53",
-    "@happyvertical/utils": "^0.80.0",
+    "@happyvertical/ocr": "^0.61.1",
+    "@happyvertical/utils": "^0.80.1",
     "@napi-rs/canvas": "0.1.100",
     "marked": "^18.0.6",
     "pdf-lib": "^1.17.1",
