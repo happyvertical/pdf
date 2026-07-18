@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.65.6
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - migrate generation 5 lifecycle (#102)
+
 ## 0.65.5
 
 ### Patch Changes
