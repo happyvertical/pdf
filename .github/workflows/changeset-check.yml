@@ -11,7 +11,7 @@ permissions:
 jobs:
   check:
     name: Check for Changeset
-    runs-on: arc-happyvertical
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
 
     steps:
       - name: Checkout

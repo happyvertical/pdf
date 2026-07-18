@@ -13,7 +13,7 @@ permissions:
 jobs:
   test:
     name: Run Tests
-    runs-on: arc-happyvertical
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
 
     steps:
       - name: Checkout repository
