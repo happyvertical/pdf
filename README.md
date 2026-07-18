@@ -261,6 +261,9 @@ import {
 
 ## Development
 
+Lifecycle-protected pull requests merge through the managed merge queue so the
+synthetic merge revision is revalidated before it reaches `main`.
+
 ```bash
 pnpm install
 pnpm build
