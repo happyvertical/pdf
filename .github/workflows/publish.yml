@@ -20,7 +20,7 @@ jobs:
   release:
     name: Version and Publish
     needs: test
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:

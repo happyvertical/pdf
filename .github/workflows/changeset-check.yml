@@ -11,7 +11,7 @@ permissions:
 jobs:
   check:
     name: Check for Changeset
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
