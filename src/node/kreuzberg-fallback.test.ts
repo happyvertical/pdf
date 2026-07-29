@@ -39,6 +39,9 @@ const AVX2_HOST = {
   reason: "this CPU advertises the 'avx2' flag in /proc/cpuinfo",
 };
 
+// Mirrors KREUZBERG_UNAVAILABLE_TTL_MS in src/shared/factory.ts.
+const RETRY_INTERVAL_MS = 30_000;
+
 const COMBINED_UNAVAILABLE = {
   available: false,
   error: 'page rendering unavailable',
@@ -122,10 +125,11 @@ describe('availability probing cost', () => {
     const kreuzbergDeps = vi
       .spyOn(KreuzbergProvider.prototype, 'checkDependencies')
       .mockResolvedValue({
-        available: false,
-        error: 'ocr backend unavailable',
-        details: { kreuzberg: true },
+        available: true,
+        details: { kreuzberg: true, ocrBackend: 'tesseract' },
       });
+
+    vi.useFakeTimers({ toFake: ['Date'] });
 
     try {
       // A language nothing else in this file uses, so these two calls share a
@@ -134,10 +138,140 @@ describe('availability probing cost', () => {
         provider: 'auto' as const,
         defaultOCROptions: { language: 'deu' },
       };
-      await getPDFReader(options);
-      await getPDFReader(options);
+      const first = await getPDFReader(options);
+
+      // Well past the retry interval: unlike an unavailable verdict, an
+      // affirmative one is settled for the life of the process.
+      vi.advanceTimersByTime(RETRY_INTERVAL_MS * 100);
+      const second = await getPDFReader(options);
 
       expect(combinedDeps).toHaveBeenCalled();
+      expect(first.constructor.name).toBe('KreuzbergProvider');
+      expect(second.constructor.name).toBe('KreuzbergProvider');
+      expect(kreuzbergDeps).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      combinedDeps.mockRestore();
+      kreuzbergDeps.mockRestore();
+    }
+  });
+
+  it('retries an unavailable probe so a repaired dependency is picked up', async () => {
+    // Missing tessdata at startup is the realistic case: the first probe fails,
+    // the dependency is installed, and a long-lived process must not keep
+    // answering from the stale verdict.
+    detectAvx2Support.mockReturnValue(AVX2_HOST);
+
+    const combinedDeps = vi
+      .spyOn(CombinedNodeProvider.prototype, 'checkDependencies')
+      .mockResolvedValue(COMBINED_UNAVAILABLE);
+    const kreuzbergDeps = vi
+      .spyOn(KreuzbergProvider.prototype, 'checkDependencies')
+      .mockResolvedValueOnce({
+        available: false,
+        error: "Failed to initialize language 'eng'",
+        details: { kreuzberg: true },
+      })
+      .mockResolvedValue({
+        available: true,
+        details: { kreuzberg: true, ocrBackend: 'tesseract' },
+      });
+
+    // Only the clock is faked; real timers keep the awaited provider work
+    // running normally.
+    vi.useFakeTimers({ toFake: ['Date'] });
+
+    try {
+      const options = {
+        provider: 'auto' as const,
+        defaultOCROptions: { language: 'nld' },
+      };
+      const beforeRepair = await getPDFReader(options);
+
+      vi.advanceTimersByTime(RETRY_INTERVAL_MS + 1);
+      const afterRepair = await getPDFReader(options);
+
+      expect(beforeRepair.constructor.name).toBe('CombinedNodeProvider');
+      expect(afterRepair.constructor.name).toBe('KreuzbergProvider');
+      expect(kreuzbergDeps).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+      combinedDeps.mockRestore();
+      kreuzbergDeps.mockRestore();
+    }
+  });
+
+  it('does not re-probe an unavailable verdict within the retry interval', async () => {
+    // With tessdata missing, checkDependencies shells out to `tesseract
+    // --list-langs` and caches nothing, so an unbounded retry would fork a
+    // subprocess per getPDFReader() call.
+    detectAvx2Support.mockReturnValue(AVX2_HOST);
+
+    const combinedDeps = vi
+      .spyOn(CombinedNodeProvider.prototype, 'checkDependencies')
+      .mockResolvedValue(COMBINED_UNAVAILABLE);
+    const kreuzbergDeps = vi
+      .spyOn(KreuzbergProvider.prototype, 'checkDependencies')
+      .mockResolvedValue({
+        available: false,
+        error: "Failed to initialize language 'eng'",
+        details: { kreuzberg: true },
+      });
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+
+    try {
+      const options = {
+        provider: 'auto' as const,
+        defaultOCROptions: { language: 'por' },
+      };
+      for (let call = 0; call < 5; call += 1) {
+        await getPDFReader(options);
+      }
+
+      // Right up to the edge of the interval. Without this the assertion holds
+      // for any interval longer than the few milliseconds the loop above takes,
+      // so shortening the constant would reintroduce the per-call subprocess
+      // with the suite still green.
+      vi.advanceTimersByTime(RETRY_INTERVAL_MS - 1);
+      await getPDFReader(options);
+
+      expect(kreuzbergDeps).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      combinedDeps.mockRestore();
+      kreuzbergDeps.mockRestore();
+    }
+  });
+
+  it('shares one in-flight probe between concurrent callers', async () => {
+    detectAvx2Support.mockReturnValue(AVX2_HOST);
+
+    const combinedDeps = vi
+      .spyOn(CombinedNodeProvider.prototype, 'checkDependencies')
+      .mockResolvedValue(COMBINED_UNAVAILABLE);
+    const kreuzbergDeps = vi
+      .spyOn(KreuzbergProvider.prototype, 'checkDependencies')
+      .mockResolvedValue({
+        available: false,
+        error: 'ocr backend unavailable',
+        details: { kreuzberg: true },
+      });
+
+    try {
+      // Retrying a negative verdict must not turn a burst of startup callers
+      // into a burst of probes.
+      const options = {
+        provider: 'auto' as const,
+        defaultOCROptions: { language: 'ita' },
+      };
+      await Promise.all([
+        getPDFReader(options),
+        getPDFReader(options),
+        getPDFReader(options),
+        getPDFReader(options),
+      ]);
+
       expect(kreuzbergDeps).toHaveBeenCalledTimes(1);
     } finally {
       combinedDeps.mockRestore();

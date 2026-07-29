@@ -82,12 +82,47 @@ async function canUseCombinedNodeProvider(
 }
 
 /**
- * Cached Kreuzberg availability, keyed by the options that can change the
- * answer. Probing costs a native module load plus a dependency check, and
- * neither result varies within a process, so repeating it on every
- * `getPDFReader()` call is pure overhead.
+ * How long an "unavailable" verdict is trusted before it is probed again.
+ *
+ * Long enough that a caller which builds a reader per request cannot turn the
+ * retry into a hot loop, short enough that a dependency repaired during startup
+ * is picked up soon after. Measured against wall-clock time, so a backwards
+ * clock step defers the retry by the size of the step; the consequence is
+ * bounded — `unpdf` keeps serving, and the entry expires once the clock passes
+ * it — and wall-clock is the right trade here because it also survives suspend
+ * and resume.
  */
-const kreuzbergAvailability = new Map<string, Promise<boolean>>();
+const KREUZBERG_UNAVAILABLE_TTL_MS = 30_000;
+
+interface KreuzbergAvailabilityEntry {
+  /** Shared so concurrent callers never start competing probes. */
+  probe: Promise<boolean>;
+  /**
+   * When this verdict stops being trusted. Absent while the probe is in flight,
+   * and absent forever once it settles affirmatively.
+   */
+  expiresAt?: number;
+}
+
+/**
+ * Cached Kreuzberg availability, keyed by the options that can change the
+ * answer. Probing costs a native module load plus a dependency check, so
+ * repeating it on every `getPDFReader()` call is pure overhead.
+ *
+ * Affirmative verdicts are kept for the life of the process. Negative ones
+ * expire, because "unavailable" is not always permanent:
+ * `checkDependencies()` reads `TESSDATA_PREFIX` and probes the filesystem, so a
+ * process whose first call runs before tessdata is installed would otherwise
+ * report kreuzberg unusable forever.
+ *
+ * They expire on a timer rather than immediately because re-probing is not
+ * free in the case that matters most: with tessdata missing,
+ * `ensureTessdataPrefix()` does not cache the miss and shells out to
+ * `tesseract --list-langs`, so an unbounded retry would fork a subprocess per
+ * `getPDFReader()` call. The TTL bounds that to one probe per interval while
+ * still letting a repair take effect.
+ */
+const kreuzbergAvailability = new Map<string, KreuzbergAvailabilityEntry>();
 
 async function probeKreuzberg(options: PDFReaderOptions): Promise<boolean> {
   try {
@@ -123,14 +158,27 @@ async function canUseKreuzberg(options: PDFReaderOptions): Promise<boolean> {
     options.defaultOCROptions?.language ?? null,
   ]);
 
-  let probe = kreuzbergAvailability.get(cacheKey);
-  if (!probe) {
-    // Store the promise, not the result, so concurrent callers share one probe.
-    probe = probeKreuzberg(options);
-    kreuzbergAvailability.set(cacheKey, probe);
+  let entry = kreuzbergAvailability.get(cacheKey);
+  if (entry?.expiresAt !== undefined && entry.expiresAt <= Date.now()) {
+    // Stale negative. Replaced rather than deleted, so a caller still holding
+    // the old entry cannot evict whatever replaced it.
+    entry = undefined;
   }
 
-  return probe;
+  if (!entry) {
+    // Store the promise, not the result, so concurrent callers share one probe.
+    entry = { probe: probeKreuzberg(options) };
+    kreuzbergAvailability.set(cacheKey, entry);
+  }
+
+  const available = await entry.probe;
+  if (!available && entry.expiresAt === undefined) {
+    // Stamped on settling rather than on creation, so an in-flight probe is
+    // always shared no matter how long it runs.
+    entry.expiresAt = Date.now() + KREUZBERG_UNAVAILABLE_TTL_MS;
+  }
+
+  return available;
 }
 
 /**
