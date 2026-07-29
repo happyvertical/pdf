@@ -24,34 +24,13 @@ import {
   PDFFileSizeError,
   PDFUnsupportedError,
 } from '../shared/types';
+import type {
+  KreuzbergExtractionConfig,
+  KreuzbergModule,
+  KreuzbergResult,
+} from './kreuzberg-runtime';
+import { loadKreuzbergModule } from './kreuzberg-runtime';
 import { ensureTessdataPrefix, formatPdfOcrRuntimeIssue } from './ocr-runtime';
-
-type KreuzbergExtractionConfig = {
-  ocr?: {
-    backend: string;
-    language?: string;
-    tesseractConfig?: {
-      enableTableDetection?: boolean;
-    };
-  };
-};
-type KreuzbergResult = {
-  content?: string | null;
-  metadata?: Record<string, unknown>;
-};
-type KreuzbergModule = {
-  extractFile(
-    filePath: string,
-    mimeType?: string | null,
-    config?: KreuzbergExtractionConfig | null,
-  ): Promise<KreuzbergResult>;
-  extractBytes(
-    data: Buffer,
-    mimeType: string,
-    config?: KreuzbergExtractionConfig | null,
-  ): Promise<KreuzbergResult>;
-  listOcrBackends?: () => string[];
-};
 
 /**
  * Configuration options for the Kreuzberg provider
@@ -99,6 +78,10 @@ export class KreuzbergProvider extends BasePDFReader {
 
   /**
    * Lazy load @kreuzberg/node
+   *
+   * Goes through the guarded runtime loader so that selecting this provider
+   * explicitly on a host whose CPU cannot run the prebuilt binary fails with a
+   * catchable error rather than a fatal signal.
    */
   private async loadKreuzberg() {
     if (this.kreuzberg) {
@@ -106,9 +89,15 @@ export class KreuzbergProvider extends BasePDFReader {
     }
 
     try {
-      this.kreuzberg = await import('@kreuzberg/node');
+      this.kreuzberg = await loadKreuzbergModule();
       return this.kreuzberg;
     } catch (error) {
+      if (error instanceof PDFDependencyError) {
+        // Already explains why the module is unusable — do not bury it under a
+        // generic "install it" hint that would not help.
+        throw error;
+      }
+
       throw new PDFDependencyError(
         '@kreuzberg/node',
         `Install with: npm install @kreuzberg/node. Error: ${(error as Error).message}`,
