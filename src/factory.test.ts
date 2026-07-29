@@ -8,6 +8,29 @@ import {
 import { CombinedNodeProvider } from './node/combined';
 import { KreuzbergProvider } from './node/kreuzberg';
 
+// Provider selection consults two facts about the host before it will pick
+// kreuzberg: whether `@kreuzberg/node` resolves, and whether the CPU can run
+// it. Both are supplied here so the selection-policy tests below assert policy
+// rather than inheriting the machine they happen to run on — `@kreuzberg/node`
+// is an optionalDependency that is absent under `--no-optional` or on a
+// platform with no prebuilt binary, and the AVX2 baseline is absent on
+// pre-x86-64-v3 hardware.
+vi.mock('@kreuzberg/node', () => ({
+  extractFile: vi.fn(),
+  extractBytes: vi.fn(),
+  listOcrBackends: () => ['tesseract'],
+}));
+
+// Spread the real module so that importing another symbol from it elsewhere in
+// src/ cannot break this file with an obscure undefined-export error.
+vi.mock('./node/cpu-baseline', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./node/cpu-baseline')>()),
+  detectAvx2Support: () => ({
+    supported: true,
+    reason: 'stubbed as capable for provider-selection tests',
+  }),
+}));
+
 describe('PDF Factory Tests', () => {
   it('should create a PDF reader with auto provider selection', async () => {
     const reader = await getPDFReader();
