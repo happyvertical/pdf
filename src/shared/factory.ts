@@ -32,15 +32,6 @@ export interface PDFProviderInfo {
   error?: string;
 }
 
-async function isKreuzbergAvailable(): Promise<boolean> {
-  try {
-    await import('@kreuzberg/node');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function requiresExternalOCRProvider(ocrProvider?: string): boolean {
   return Boolean(
     ocrProvider && ocrProvider !== 'auto' && ocrProvider !== 'tesseract',
@@ -90,12 +81,28 @@ async function canUseCombinedNodeProvider(
   }
 }
 
-async function canUseKreuzberg(options: PDFReaderOptions): Promise<boolean> {
-  if (!(await isKreuzbergAvailable())) {
-    return false;
-  }
+/**
+ * Cached Kreuzberg availability, keyed by the options that can change the
+ * answer. Probing costs a native module load plus a dependency check, and
+ * neither result varies within a process, so repeating it on every
+ * `getPDFReader()` call is pure overhead.
+ */
+const kreuzbergAvailability = new Map<string, Promise<boolean>>();
 
+async function probeKreuzberg(options: PDFReaderOptions): Promise<boolean> {
   try {
+    // Settle whether the native module is usable before constructing anything
+    // that would call into it. Its prebuilt binary raises SIGILL on a pre-AVX2
+    // CPU, and a signal cannot be caught here or anywhere else — it takes the
+    // whole process down. The provider's own loader is guarded too; this is the
+    // early-out that keeps auto-selection from building a reader to find out.
+    const { isKreuzbergModuleLoadable } = await import(
+      '../node/kreuzberg-runtime.js'
+    );
+    if (!(await isKreuzbergModuleLoadable())) {
+      return false;
+    }
+
     const { KreuzbergProvider } = await import('../node/kreuzberg.js');
     const reader = new KreuzbergProvider({
       ocrBackend: options.ocrProvider,
@@ -107,6 +114,23 @@ async function canUseKreuzberg(options: PDFReaderOptions): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function canUseKreuzberg(options: PDFReaderOptions): Promise<boolean> {
+  // maxFileSize is deliberately absent: it never affects dependency checks.
+  const cacheKey = JSON.stringify([
+    options.ocrProvider ?? null,
+    options.defaultOCROptions?.language ?? null,
+  ]);
+
+  let probe = kreuzbergAvailability.get(cacheKey);
+  if (!probe) {
+    // Store the promise, not the result, so concurrent callers share one probe.
+    probe = probeKreuzberg(options);
+    kreuzbergAvailability.set(cacheKey, probe);
+  }
+
+  return probe;
 }
 
 /**
@@ -201,7 +225,13 @@ export async function getPDFReader(
   let selectedProvider = provider;
   if (provider === 'auto') {
     if (isNode) {
-      if (requiresExternalOCRProvider(readerOptions.ocrProvider)) {
+      if (
+        requiresExternalOCRProvider(readerOptions.ocrProvider) ||
+        readerOptions.enableOCR === false
+      ) {
+        // Kreuzberg earns its place in this chain through integrated OCR. A
+        // caller that routes OCR elsewhere, or switches it off outright, gains
+        // nothing from the native provider and should not pay to probe it.
         selectedProvider = 'unpdf';
       } else if (await canUseCombinedNodeProvider(readerOptions)) {
         selectedProvider = 'unpdf';

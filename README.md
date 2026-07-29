@@ -213,6 +213,31 @@ options. Explicit options always win.
 
 The `pdfjs` provider is not a stable public package target yet.
 
+Automatic selection stays on `unpdf` when `enableOCR` is `false` or
+`ocrProvider` names a backend Kreuzberg cannot serve, since Kreuzberg is in the
+chain for its integrated OCR.
+
+### Kreuzberg needs an AVX2-capable CPU
+
+The prebuilt `@kreuzberg/node` binary executes AVX2 instructions, so using it on
+a pre-AVX2 x86-64 host (`x86-64-v2` and below) raises `SIGILL` and terminates the
+process. The binary is loaded lazily on the first native call, so any code that
+merely asks whether the provider works is enough to trigger it.
+`optionalDependencies` cannot prevent this: npm and pnpm only skip a package by
+`os`, `cpu`, or `libc`, and AVX2 is a microarchitecture level rather than an
+architecture.
+
+This package therefore reads the `avx2` flag from `/proc/cpuinfo` before loading
+anything native. Automatic selection falls back to `unpdf` when the flag is
+absent. Requesting `provider: 'kreuzberg'` explicitly still returns a reader,
+and that reader degrades the same way it does for any other missing dependency
+rather than killing the process: `checkDependencies()` reports
+`available: false` with an error naming AVX2, and extraction calls return their
+empty result. Check `checkDependencies()` before relying on this provider.
+
+Non-Linux and non-x86-64 hosts keep attempting the load: their CPU flags are not
+readable this way, and the fault has only been observed on older Linux servers.
+
 ## Errors
 
 ```typescript
