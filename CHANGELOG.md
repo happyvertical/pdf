@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.65.9
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - sync generation-21 agent policy kernel (#118)
+
 ## 0.65.8
 
 ### Patch Changes
