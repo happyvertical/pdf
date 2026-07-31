@@ -4,6 +4,13 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, edited, labeled, unlabeled]
 
+# Pull-request validation: a newer event supersedes the older run. Every
+# decision this workflow makes is read from current PR state (title, labels,
+# head SHA), so the newest run is always the only one worth finishing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   pull-requests: read
   contents: read
