@@ -9,6 +9,10 @@
     "repository": "happyvertical/pdf",
     "project_url": "https://github.com/orgs/happyvertical/projects/7"
   },
+  "forge": {
+    "provider": "github",
+    "repository": "happyvertical/pdf"
+  },
   "labels": {
     "claim": "agent: implementation",
     "blocked": "status: blocked",
