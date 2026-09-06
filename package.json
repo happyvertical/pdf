@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "packageManager": "pnpm@11.13.0",
   "engines": {
-    "node": ">=24",
+    "node": ">=24.18.0",
     "pnpm": ">=11.13.0"
   },
   "files": [
@@ -64,8 +64,8 @@
   },
   "dependencies": {
     "@happyvertical/ocr": "^0.61.1",
-    "@happyvertical/utils": "^0.80.1",
-    "@napi-rs/canvas": "0.1.100",
+    "@happyvertical/utils": "^0.89.0",
+    "@napi-rs/canvas": "1.0.8",
     "marked": "^18.0.6",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "6.1.200",
@@ -77,7 +77,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.4",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^3.0.0",
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "@types/node": "24.13.3",
@@ -87,7 +87,7 @@
     "typedoc": "^0.28.20",
     "typescript": "6.0.3",
     "vite": "8.1.4",
-    "vite-plugin-dts": "5.0.3",
+    "vite-plugin-dts": "5.1.0",
     "vitest": "4.1.10"
   }
 }
