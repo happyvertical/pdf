@@ -142,3 +142,10 @@ test('prose that mentions secrets is not an error; forged comments and flow-map 
   const flow = 'name: t\non: {pull_request: {}}\njobs:\n  j:\n    uses: ./x.yml\n    secrets: inherit\n';
   assert.ok(checkWorkflow('t.yml', flow).length >= 1);
 });
+
+test('flow-mapping pass-through is rejected; key-shaped script content is not', () => {
+  const flow = 'name: t\non:\n  pull_request:\njobs: {j: {uses: ./x.yml, secrets: inherit}}\n';
+  assert.ok(checkWorkflow('t.yml', flow).length >= 1);
+  const benign = '    steps:\n      - run: |\n          cat <<EOF\n          secrets: none\n          EOF';
+  assert.deepEqual(check({ on: '  pull_request:', job: benign }), []);
+});

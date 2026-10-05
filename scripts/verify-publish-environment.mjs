@@ -89,6 +89,25 @@ function pushBranches(push) {
   return items;
 }
 
+// Lines outside block-scalar bodies (`run: |` scripts, `if: >-` expressions are content).
+function structural(lines) {
+  const out = [];
+  let blockIndent = -1;
+  lines.forEach((l, i) => {
+    const indent = l.length - l.trimStart().length;
+    if (blockIndent >= 0) {
+      if (l.trim() === '' || indent > blockIndent) return;
+      blockIndent = -1;
+    }
+    const code = l.replace(/(^|\s)#.*$/, '');
+    if (/:\s*[|>][-+0-9]*\s*$/.test(code) || /^\s*-\s*[|>][-+0-9]*\s*$/.test(code)) {
+      blockIndent = indent;
+    }
+    out.push({ l, i });
+  });
+  return out;
+}
+
 export function checkWorkflow(name, text) {
   const errors = [];
   const lines = text
@@ -136,9 +155,9 @@ export function checkWorkflow(name, text) {
     // workflow: pass-through (`secrets: inherit`, any spelling), wildcards, computed and
     // whole-context access cannot be attributed to a name.
     const code = [
-      ...body.matchAll(/\$\{\{[\s\S]*?\}\}/g),
-      ...body.matchAll(/^\s*(?:-\s+)?secrets\s*:.*$/gim),
-    ].map((m) => m[0]).join('\n');
+      ...[...body.matchAll(/\$\{\{[\s\S]*?\}\}/g)].map((m) => m[0]),
+      ...structural(lines).flatMap(({ l }) => l.match(/\bsecrets\s*:.*$/i) ?? []),
+    ].join('\n');
     const residual = code
       .replace(/secrets\s*\.\s*[A-Za-z_][\w-]*/gi, '')
       .replace(/secrets\s*\[\s*['"][\w-]+['"]\s*\]/gi, '');
@@ -153,17 +172,7 @@ export function checkWorkflow(name, text) {
   // Structural lines only (block-scalar bodies such as `run: |` scripts are skipped). A
   // structural line may not start with a quote, anchor, alias, tag or complex-key marker:
   // those spell mapping keys this scan cannot decode (`"pu\\\nsh":`, `&e push:`, `? secrets`).
-  let blockIndent = -1;
-  lines.forEach((l, i) => {
-    const indent = l.length - l.trimStart().length;
-    if (blockIndent >= 0) {
-      if (l.trim() === '' || indent > blockIndent) return;
-      blockIndent = -1;
-    }
-    const code = l.replace(/(^|\s)#.*$/, '');
-    if (/:\s*[|>][-+0-9]*\s*$/.test(code) || /^\s*-\s*[|>][-+0-9]*\s*$/.test(code)) {
-      blockIndent = indent;
-    }
+  for (const { l, i } of structural(lines)) {
     // A quoted list item (`- 'path'`) is a plain scalar unless its closing quote is
     // missing (a multi-line key) or is followed by a colon (a key).
     const listQuote = /^\s*-\s+(['"])/.exec(l);
@@ -176,7 +185,7 @@ export function checkWorkflow(name, text) {
         `${name}:${i + 1}: quoted or anchored keys, aliases, tags and complex keys are not supported in workflows`,
       );
     }
-  });
+  }
   if (
     /\bsecrets\s*(?:\.\s*\*|\[\s*(?!['"][\w-]+['"]\s*\]))|\(\s*secrets\s*[,)]/i.test(body)
   ) {
