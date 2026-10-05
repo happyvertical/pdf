@@ -19,7 +19,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/**'
-      - 'scripts/verify-publish-environment.mjs'
+      - 'scripts/verify-publish-environment*.mjs'
       - 'scripts/release-registry.mjs'
       - 'package.json'
   workflow_dispatch:
@@ -50,7 +50,9 @@ jobs:
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
 
       - name: Verify publish-secret workflow policy
-        run: node scripts/verify-publish-environment.mjs
+        run: |
+          node --test scripts/verify-publish-environment.test.mjs
+          node scripts/verify-publish-environment.mjs
 
       - name: Install dependencies
         run: pnpm install

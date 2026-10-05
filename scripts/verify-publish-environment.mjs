@@ -3,8 +3,11 @@
 //
 // - Every job that references a publish secret (NPM_HAPPYVERTICAL_PUBLISH_TOKEN,
 //   NPM_TOKEN) declares `environment: release`, the Environment whose
-//   deployment-branch rule allows only `main`, and refuses to run off the
-//   default branch (`if:` on github.ref) when the workflow is dispatchable.
+//   deployment-branch rule allows only `main`. Its workflow may only be
+//   triggered by push restricted to `branches: [main]`, schedule,
+//   repository_dispatch, workflow_call or workflow_dispatch; a dispatchable
+//   workflow also needs a job-level `if:` that is a plain main-ref guard (no
+//   `||`).
 // - No workflow triggered by pull_request, pull_request_target or merge_group
 //   references a publish secret (a pull request runs its own copy of the
 //   workflow files, so it could read the secret), and none passes
@@ -18,8 +21,41 @@ import { join } from 'node:path';
 
 const SECRETS = ['NPM_HAPPYVERTICAL_PUBLISH_TOKEN', 'NPM_TOKEN'];
 const PR_EVENTS = ['pull_request', 'pull_request_target', 'merge_group'];
-const secretRef = new RegExp(`secrets\\.(${SECRETS.join('|')})\\b`);
+const names = SECRETS.join('|');
+// secrets.NAME and secrets['NAME'] / secrets["NAME"]; names are case-insensitive.
+const secretRef = new RegExp(
+  `secrets\\s*(?:\\.\\s*(?:${names})\\b|\\[\\s*['"](?:${names})['"]\\s*\\])`,
+  'i',
+);
 const mainGuard = /github\.ref\s*==\s*'refs\/heads\/main'/;
+const ALLOWED_EVENTS = [
+  'push',
+  'schedule',
+  'repository_dispatch',
+  'workflow_dispatch',
+  'workflow_call',
+];
+
+// Lines of one event's block inside the `on:` text (deeper-indented than the event key).
+function eventBlock(triggers, event) {
+  const ls = triggers.split('\n');
+  const i = ls.findIndex((l) => new RegExp(`^ {2}${event}:`).test(l));
+  if (i < 0) return null;
+  const out = [ls[i]];
+  for (let j = i + 1; j < ls.length && (/^ {3,}/.test(ls[j]) || ls[j].trim() === ''); j++) {
+    out.push(ls[j]);
+  }
+  return out.join('\n');
+}
+
+function jobIf(body) {
+  const ls = body.split('\n');
+  const i = ls.findIndex((l) => /^ {4}if:/.test(l));
+  if (i < 0) return null;
+  let cond = ls[i].replace(/^ {4}if:\s*[>|][-+]?\s*/, '').replace(/^ {4}if:\s*/, '');
+  for (let j = i + 1; j < ls.length && /^ {5,}/.test(ls[j]); j++) cond += ` ${ls[j].trim()}`;
+  return cond;
+}
 
 export function checkWorkflow(name, text) {
   const errors = [];
@@ -63,18 +99,42 @@ export function checkWorkflow(name, text) {
     });
   }
 
-  for (const job of jobs) {
+  const secretJobs = jobs.filter((j) => secretRef.test(j.body.join('\n')));
+  if (secretJobs.length && !prTriggered.length) {
+    const events = [...triggers.matchAll(/^ {2}([\w-]+):/gm)].map((m) => m[1]);
+    const inline = /^["']?on["']?:\s*\S/.test(lines[onIdx] ?? '');
+    if (inline) errors.push(`${name}: use a block-style "on:" so triggers can be verified`);
+    for (const e of events) {
+      if (!ALLOWED_EVENTS.includes(e)) {
+        errors.push(`${name}: publish-secret workflow has unsupported trigger "${e}"`);
+      }
+    }
+    const push = eventBlock(triggers, 'push');
+    if (
+      push &&
+      !(
+        /branches:\s*\[\s*['"]?main['"]?\s*\]/.test(push) ||
+        /branches:\s*\n\s*-\s*['"]?main['"]?\s*(\n|$)/.test(push)
+      )
+    ) {
+      errors.push(`${name}: push trigger must be restricted to "branches: [main]"`);
+    }
+    if (push && /(branches-ignore|tags|tags-ignore):/.test(push)) {
+      errors.push(`${name}: push trigger must not use branches-ignore or tags filters`);
+    }
+  }
+
+  for (const job of secretJobs) {
     const body = job.body.join('\n');
-    if (!secretRef.test(body)) continue;
     if (prTriggered.length) continue; // already reported above
     if (!/^ {4}environment:\s*release\s*$/m.test(body)) {
       errors.push(`${name}: job "${job.id}" references a publish secret without "environment: release"`);
     }
     if (dispatchable) {
-      const cond = /^ {4}if:\s*(.*)$/m.exec(body);
-      if (!cond || !mainGuard.test(cond[1])) {
+      const cond = jobIf(body);
+      if (cond === null || !mainGuard.test(cond) || cond.includes('||')) {
         errors.push(
-          `${name}: job "${job.id}" is workflow_dispatch-able but has no job-level "if: github.ref == 'refs/heads/main'"`,
+          `${name}: job "${job.id}" is workflow_dispatch-able but has no plain job-level "if: github.ref == 'refs/heads/main'" guard (no ||)`,
         );
       }
     }
