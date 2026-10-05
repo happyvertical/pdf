@@ -36,6 +36,14 @@ yarn add @happyvertical/pdf
 bun add @happyvertical/pdf
 ```
 
+Releases are published to the organisation registry, `https://npm.happyvertical.com/`
+(which proxies npmjs for reads), and mirrored to npmjs on a best-effort basis.
+Map the scope to it in your project `.npmrc` to install from the primary:
+
+```ini
+@happyvertical:registry=https://npm.happyvertical.com/
+```
+
 ## Basic Usage
 
 ```typescript

@@ -1,0 +1,79 @@
+name: Publish Dry Run
+
+# Proves, without publishing, that the release can authenticate to and resolve
+# against the primary registry (npm.happyvertical.com) with the same token,
+# allowlist and tarball the Publish workflow uses (#137).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/publish-dry-run.yml'
+      - 'scripts/release-registry.mjs'
+      - 'package.json'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_PRIMARY_REGISTRY: 'https://npm.happyvertical.com/'
+
+jobs:
+  dry-run:
+    name: Primary Registry Dry Run
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build and pack
+        run: |
+          set -euo pipefail
+          pnpm build
+          mkdir -p "$RUNNER_TEMP/release-pack"
+          pnpm pack --pack-destination "$RUNNER_TEMP/release-pack"
+          mapfile -t tarballs < <(find "$RUNNER_TEMP/release-pack" -name '*.tgz')
+          [ "${#tarballs[@]}" -eq 1 ]
+          echo "TARBALL=${tarballs[0]}" >> "$GITHUB_ENV"
+
+      - name: Authenticate and dry-run publish to the primary registry
+        env:
+          PRIMARY_TOKEN: ${{ secrets.NPM_HAPPYVERTICAL_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PRIMARY_TOKEN:-}" ]; then
+            echo "::warning::NPM_HAPPYVERTICAL_PUBLISH_TOKEN is not available to this run (for example a fork); primary registry auth was not checked"
+            exit 0
+          fi
+          node --input-type=module -e "import { primaryRegistry } from './scripts/release-registry.mjs'; primaryRegistry();"
+          host="${RELEASE_PRIMARY_REGISTRY#https://}"
+          host="${host%/}"
+          rc="$RUNNER_TEMP/release-npmrc"
+          umask 077
+          printf '//%s/:_authToken=%s\n' "$host" "$PRIMARY_TOKEN" > "$rc"
+          export NPM_CONFIG_USERCONFIG="$rc"
+          args=(--registry "$RELEASE_PRIMARY_REGISTRY" "--@happyvertical:registry=$RELEASE_PRIMARY_REGISTRY")
+          who=$(npm whoami "${args[@]}")
+          echo "Authenticated to $RELEASE_PRIMARY_REGISTRY as $who"
+          npm view @happyvertical/ocr version "${args[@]}" > /dev/null
+          echo "Scoped dependencies resolve through $RELEASE_PRIMARY_REGISTRY"
+          npm publish "$TARBALL" "${args[@]}" --access public --dry-run
