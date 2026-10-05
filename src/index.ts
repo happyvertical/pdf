@@ -60,6 +60,12 @@ export type {
   HtmlToPdfMargin,
   HtmlToPdfOptions,
 } from './node/html-to-pdf';
+export type {
+  ImagesToPdfInput,
+  ImagesToPdfOptions,
+  ImagesToPdfPageDimensions,
+  ImagesToPdfPageSizeName,
+} from './node/images-to-pdf';
 
 /**
  * Render an HTML document to PDF bytes using a system Chromium.
@@ -79,6 +85,23 @@ export async function renderHtmlToPdf(
 ): Promise<Uint8Array> {
   const mod = await import('./node/html-to-pdf');
   return mod.renderHtmlToPdf(html, options);
+}
+
+/**
+ * Build a PDF from images (PNG, JPEG), one per page and in order,
+ * without a browser. See `ImagesToPdfOptions` for sizing, fit, margin,
+ * orientation, metadata and input limits. Inputs are untrusted: failures are
+ * `PDFImageUnsupportedTypeError`, `PDFImageCorruptError`, or
+ * `PDFImageLimitExceededError`.
+ *
+ * Node-only at runtime; loaded lazily like the other generators.
+ */
+export async function imagesToPdf(
+  images: import('./node/images-to-pdf').ImagesToPdfInput[],
+  options?: import('./node/images-to-pdf').ImagesToPdfOptions,
+): Promise<Uint8Array> {
+  const mod = await import('./node/images-to-pdf');
+  return mod.imagesToPdf(images, options);
 }
 
 /**

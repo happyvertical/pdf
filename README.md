@@ -154,6 +154,50 @@ const pdf = await renderMarkdownToPdf('# Status\n\nEverything is green.', {
 await writeFile('status.pdf', pdf);
 ```
 
+### Images
+
+`imagesToPdf()` puts one image on each page, in the order given, with `pdf-lib`
+only: no browser, no network, and nothing written to disk. It returns the PDF
+bytes. Inputs are `Buffer`, `Uint8Array`, or a file path.
+
+```typescript
+import { writeFile } from 'node:fs/promises';
+import { imagesToPdf } from '@happyvertical/pdf';
+
+const pdf = await imagesToPdf(['page-1.jpg', page2Buffer], {
+  pageSize: 'letter',
+  fit: 'contain',
+  margin: 36,
+  title: 'Mill certificate',
+  creationDate: new Date('2026-10-04T00:00:00Z'), // same inputs + date = same bytes
+});
+
+await writeFile('cert.pdf', pdf);
+```
+
+- Types: PNG (including alpha) and JPEG, detected by file signature, never by
+  file name or MIME type. JPEG EXIF orientation 1-8 is applied, so a phone
+  photo comes out upright. **WebP is not supported** and throws
+  `PDFImageUnsupportedTypeError`: `@napi-rs/canvas` can spin forever decoding a
+  damaged WebP, so untrusted WebP is never handed to it. Convert it first.
+- `pageSize`: `'image'` (default; the page is the image at `dpi`), `'letter'`,
+  `'legal'`, `'a3'`, `'a4'`, `'a5'`, or `{ width, height }` in points.
+  `orientation: 'auto'` (default) picks portrait or landscape per image for
+  named and explicit sizes; `'portrait'` / `'landscape'` force one.
+- `fit`: `'contain'` (default) shows the whole image; `'cover'` fills the area
+  inside the margin and crops to it. `margin` is points on every side
+  (default 0; in `'image'` mode it is added around the image). `dpi` default 150.
+- `title` and `creationDate` set the document metadata. Without `creationDate`
+  the current time is used, so output is not byte-stable.
+- Limits (inputs are untrusted): `maxImages` 100, `maxImageBytes` 25 MiB,
+  `maxTotalBytes` 256 MiB, `maxImagePixels` 50 million. Exceeding one throws
+  `PDFImageLimitExceededError` (`limit`, `actual`, `max`, `index`). A truncated
+  or damaged image throws `PDFImageCorruptError`; an unsupported type throws
+  `PDFImageUnsupportedTypeError`. None of the errors carry image contents or
+  paths, only the image's `index`. Bad option values and an empty list throw
+  `PDFGenerationError`. PNG data is checksummed and size-checked before
+  decoding.
+
 ### HTML
 
 `renderHtmlToPdf()` uses `puppeteer-core` and never downloads a browser. Install
@@ -245,6 +289,9 @@ import {
   PDFDependencyError,
   PDFFileSizeError,
   PDFImageCollectionLimitError,
+  PDFImageCorruptError,
+  PDFImageLimitExceededError,
+  PDFImageUnsupportedTypeError,
   PDFOCRFallbackError,
   PDFUnsupportedError,
   getPDFReader,
