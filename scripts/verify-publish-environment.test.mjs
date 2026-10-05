@@ -124,3 +124,12 @@ test('a multi-line reference in a publish job still needs the environment', () =
   const job = '    runs-on: x\n    steps:\n      - run: >\n          echo ${{ secrets\n          .NPM_TOKEN }}';
   assert.equal(check({ on: PUSH_MAIN, job }).length, 1);
 });
+
+test('multi-line quoted keys, anchored keys and complex keys are rejected', () => {
+  const pr = (job) => check({ on: '  pull_request:', job });
+  assert.ok(pr('    uses: ./x.yml\n    "se\\\n    crets": inherit').length >= 1);
+  assert.ok(check({ on: '  &e push:', job: OK_JOB }).length >= 1);
+  assert.ok(pr('    uses: ./x.yml\n    ? secrets\n    : inherit').length >= 1);
+  assert.deepEqual(check({ on: `${PUSH_MAIN}\n    paths:\n      - 'a/**'\n      - "b"`, job: OK_JOB }), []);
+  assert.equal(check({ on: '  push: {branches: [dev]}', job: OK_JOB }).length >= 1, true);
+});

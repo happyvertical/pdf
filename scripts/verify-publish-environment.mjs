@@ -143,12 +143,28 @@ export function checkWorkflow(name, text) {
   // Global, before any classification: quoted keys (of any content), anchors and aliases
   // could hide triggers, jobs or pass-through from this scan, and computed or
   // whole-context access to the secrets context cannot be attributed to a name.
+  // Structural lines only (block-scalar bodies such as `run: |` scripts are skipped). A
+  // structural line may not start with a quote, anchor, alias, tag or complex-key marker:
+  // those spell mapping keys this scan cannot decode (`"pu\\\nsh":`, `&e push:`, `? secrets`).
+  let blockIndent = -1;
   lines.forEach((l, i) => {
-    if (
-      /^\s*(?:-\s+)?(?:'[^']*'|"(?:[^"\\]|\\.)*")\s*:(\s|$)/.test(l) ||
-      /<<:|:\s*[&*][\w-]+/.test(l)
-    ) {
-      errors.push(`${name}:${i + 1}: quoted keys, anchors and aliases are not supported in workflows`);
+    const indent = l.length - l.trimStart().length;
+    if (blockIndent >= 0) {
+      if (l.trim() === '' || indent > blockIndent) return;
+      blockIndent = -1;
+    }
+    if (/:\s*[|>][-+0-9]*\s*$/.test(l) || /^\s*-\s*[|>][-+0-9]*\s*$/.test(l)) blockIndent = indent;
+    // A quoted list item (`- 'path'`) is a plain scalar unless its closing quote is
+    // missing (a multi-line key) or is followed by a colon (a key).
+    const listQuote = /^\s*-\s+(['"])/.exec(l);
+    const listScalar = listQuote && new RegExp(`^\\s*-\\s+${listQuote[1]}[^${listQuote[1]}]*${listQuote[1]}\\s*(,|$)`).test(l);
+    const startsOdd = listQuote
+      ? !listScalar
+      : /^\s*(?:-\s+)?['"&*!?%]/.test(l);
+    if (startsOdd || /<<:|:\s*[&*!][\w-]+/.test(l) || /^\s*-\s+[&*!?%]/.test(l)) {
+      errors.push(
+        `${name}:${i + 1}: quoted or anchored keys, aliases, tags and complex keys are not supported in workflows`,
+      );
     }
   });
   if (
@@ -167,7 +183,9 @@ export function checkWorkflow(name, text) {
         errors.push(`${name}: publish-secret workflow has unsupported trigger "${e}"`);
       }
     }
+    if (events.length === 0) errors.push(`${name}: could not read the "on:" triggers`);
     const push = eventBlock(triggers, 'push');
+    if (has('push') && !push) errors.push(`${name}: could not read the push trigger`);
     if (push) {
       const branches = pushBranches(push);
       if (!branches || branches.length !== 1 || branches[0] !== 'main') {
