@@ -81,6 +81,7 @@ function pushBranches(push) {
   if (!m) return null;
   const items = [];
   for (const l of push.slice(m.index + m[0].length).split('\n').slice(1)) {
+    if (l.trim() === '') continue; // comments are blanked before parsing
     const it = /^\s*-\s*(.*?)\s*$/.exec(l);
     if (!it) break;
     items.push(it[1].replace(/^['"]|['"]$/g, ''));
@@ -131,6 +132,18 @@ export function checkWorkflow(name, text) {
     });
   }
 
+  // Global, before any classification: quoted keys, anchors and aliases could hide
+  // triggers, jobs or pass-through from the line scan, and computed access to the
+  // secrets context cannot be attributed to a name.
+  lines.forEach((l, i) => {
+    if (/^\s*(-\s+)?['"][\w-]+['"]\s*:/.test(l) || /<<:|:\s*[&*][\w-]+/.test(l)) {
+      errors.push(`${name}:${i + 1}: quoted keys, anchors and aliases are not supported in workflows`);
+    }
+    if (/\bsecrets\s*\[\s*(?!['"][\w-]+['"]\s*\])|\(\s*secrets\s*[,)]/i.test(l)) {
+      errors.push(`${name}:${i + 1}: computed or whole-context access to secrets is not supported`);
+    }
+  });
+
   const secretJobs = jobs.filter((j) => secretRef.test(j.body.join('\n')));
   if (secretJobs.length && !prTriggered.length) {
     const events = [...triggers.matchAll(/^ {2}([\w-]+):/gm)].map((m) => m[1]);
@@ -151,11 +164,6 @@ export function checkWorkflow(name, text) {
         errors.push(`${name}: push trigger must not use branches-ignore or tags filters`);
       }
     }
-    lines.forEach((l, i) => {
-      if (/^\s*(-\s+)?['"][\w-]+['"]\s*:/.test(l) || /<<:|:\s*[&*][\w-]+/.test(l)) {
-        errors.push(`${name}:${i + 1}: quoted keys, anchors and aliases are not supported in publish workflows`);
-      }
-    });
   }
 
   // References must sit inside job bodies: a workflow-level `env:` would bypass the job checks.

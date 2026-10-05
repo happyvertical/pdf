@@ -95,3 +95,17 @@ test('workflow-level references, quoted keys and aliases are rejected', () => {
     1,
   );
 });
+
+test('blank or comment lines do not hide extra branches', () => {
+  const on = '  push:\n    branches:\n      - main\n      # c\n\n      - dev';
+  assert.equal(check({ on, job: OK_JOB }).length, 1);
+});
+
+test('quoted keys and computed secrets access are rejected everywhere', () => {
+  const pr = (job) => check({ on: '  pull_request:', job });
+  assert.ok(pr('    uses: ./x.yml\n    \'secrets\': inherit').length >= 1);
+  assert.ok(pr('    steps:\n      - run: echo ${{ secrets[format(\'NPM_{0}\', \'TOKEN\')] }}').length >= 1);
+  assert.ok(pr('    steps:\n      - run: echo ${{ toJSON(secrets) }}').length >= 1);
+  const quotedOn = wf({ on: "  'pull_request':", job: '    uses: ./x.yml\n    secrets: inherit' });
+  assert.ok(checkWorkflow('t.yml', quotedOn).length >= 1);
+});
