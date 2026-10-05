@@ -46,6 +46,20 @@
 
 ### Publishing
 
-- Releases publish `@happyvertical/pdf` to the public npm registry.
-- Keep OCR behavior behind `@happyvertical/ocr` and package resolution pointed
-  at npmjs unless a dependency explicitly requires another registry.
+- Releases publish `@happyvertical/pdf` to the primary registry
+  `https://npm.happyvertical.com/` with `NPM_HAPPYVERTICAL_PUBLISH_TOKEN`; the
+  version commit and tag are pushed atomically, only after that publish
+  succeeds. A rerun resumes: a version already on the primary must have the
+  same `dist.integrity` as the freshly packed tarball (otherwise the job stops
+  and the version must be bumped), and an existing tag must have the expected
+  tree. npmjs is a separate non-blocking job (`NPM_TOKEN`) that publishes the
+  exact tarball the primary serves, integrity-checked. The allowed hosts live in
+  `scripts/release-registry.mjs`. No pull-request workflow may reference a
+  publish secret (a PR runs its own copy of the workflow file, so it could read
+  it); `Publish Dry Run` is secretless (build, pack, registry resolution), and
+  the token is proven by `npm whoami`, the first credentialed step of the
+  Publish workflow on `main`. Owner follow-up: move the publish secrets to a
+  GitHub Environment restricted to `main`; an organisation secret is otherwise
+  readable by any same-repository pull-request workflow.
+- Keep OCR behavior behind `@happyvertical/ocr`. Dependencies still install from
+  npmjs, which the primary registry mirrors.

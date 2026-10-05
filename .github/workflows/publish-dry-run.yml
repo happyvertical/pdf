@@ -1,0 +1,73 @@
+name: Publish Dry Run
+
+# Proves, without publishing, that a release can authenticate to and resolve
+# against the primary registry (npm.happyvertical.com) (#137).
+#
+# NO SECRETS: this workflow runs on pull_request, where GitHub uses the pull
+# request's OWN copy of the workflow file, so any secret it referenced could
+# be read by whoever edits that file. No pull-request workflow in this
+# repository may reference a publish secret (NPM_HAPPYVERTICAL_PUBLISH_TOKEN,
+# NPM_TOKEN). Token authentication is proven where the secret legitimately
+# lives: the first credentialed step of the Publish workflow on main
+# (`npm whoami`), before any versioning, tagging or publishing. This check only
+# proves what needs no credential: build, pack, and registry resolution.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/publish-dry-run.yml'
+      - 'scripts/release-registry.mjs'
+      - 'package.json'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    name: Pack and Resolve
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build and pack
+        run: |
+          set -euo pipefail
+          pnpm build
+          mkdir -p "$RUNNER_TEMP/release-pack"
+          pnpm pack --pack-destination "$RUNNER_TEMP/release-pack"
+          [ "$(find "$RUNNER_TEMP/release-pack" -name '*.tgz' | wc -l)" -eq 1 ]
+
+      - name: Check registry configuration and resolution
+        run: |
+          set -euo pipefail
+          registry=https://npm.happyvertical.com/
+          node --input-type=module -e "
+            import { primaryRegistry } from './scripts/release-registry.mjs';
+            import { readFileSync } from 'node:fs';
+            const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+            if (primaryRegistry() !== '$registry') throw new Error('primary registry is not $registry');
+            if (pkg.publishConfig?.registry !== '$registry') throw new Error('publishConfig.registry is not $registry');
+          "
+          npm view @happyvertical/ocr version --registry "$registry" "--@happyvertical:registry=$registry" > /dev/null
+          echo "publishConfig and scoped dependency resolution use $registry"
