@@ -109,3 +109,18 @@ test('quoted keys and computed secrets access are rejected everywhere', () => {
   const quotedOn = wf({ on: "  'pull_request':", job: '    uses: ./x.yml\n    secrets: inherit' });
   assert.ok(checkWorkflow('t.yml', quotedOn).length >= 1);
 });
+
+test('multi-line, wildcard, spaced and escaped forms are rejected', () => {
+  const pr = (job) => check({ on: '  pull_request:', job });
+  assert.ok(pr('    steps:\n      - run: >\n          echo ${{ toJSON(\n          secrets\n          ) }}').length >= 1);
+  assert.ok(pr("    steps:\n      - run: echo ${{ join(secrets.*, ',') }}").length >= 1);
+  assert.ok(pr('    uses: ./x.yml\n    secrets : inherit').length >= 1);
+  assert.ok(pr('    uses: ./x.yml\n    "se\\u0063rets": inherit').length >= 1);
+  assert.ok(pr('    steps:\n      - run: >\n          echo ${{ secrets\n          .NPM_TOKEN }}').length >= 1);
+  assert.deepEqual(pr('    steps:\n      - run: echo ${{ secrets.GITHUB_TOKEN }}'), []);
+});
+
+test('a multi-line reference in a publish job still needs the environment', () => {
+  const job = '    runs-on: x\n    steps:\n      - run: >\n          echo ${{ secrets\n          .NPM_TOKEN }}';
+  assert.equal(check({ on: PUSH_MAIN, job }).length, 1);
+});

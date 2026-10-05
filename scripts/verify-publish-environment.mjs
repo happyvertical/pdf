@@ -122,27 +122,40 @@ export function checkWorkflow(name, text) {
     }
   }
 
+  // Whole-text checks: expressions and keys may span lines, so nothing here is per line.
+  const body = lines.join('\n');
+  const anyRef = new RegExp(secretRef.source, 'gi');
   if (prTriggered.length) {
-    lines.forEach((l, i) => {
-      if (secretRef.test(l) || /^\s*secrets:/.test(l)) {
-        errors.push(
-          `${name}:${i + 1}: triggered by ${prTriggered.join('/')} but references a publish secret`,
-        );
-      }
-    });
+    if (anyRef.test(body)) {
+      errors.push(`${name}: triggered by ${prTriggered.join('/')} but references a publish secret`);
+    }
+    // Only literal lookups (secrets.NAME, secrets['NAME']) may remain in a pull-request
+    // workflow: pass-through (`secrets: inherit`, any spelling), wildcards, computed and
+    // whole-context access cannot be attributed to a name.
+    const residual = body
+      .replace(/secrets\s*\.\s*[A-Za-z_][\w-]*/gi, '')
+      .replace(/secrets\s*\[\s*['"][\w-]+['"]\s*\]/gi, '');
+    if (/\bsecrets\b/i.test(residual)) {
+      errors.push(`${name}: pull-request workflow uses the secrets context beyond literal lookups`);
+    }
   }
 
-  // Global, before any classification: quoted keys, anchors and aliases could hide
-  // triggers, jobs or pass-through from the line scan, and computed access to the
-  // secrets context cannot be attributed to a name.
+  // Global, before any classification: quoted keys (of any content), anchors and aliases
+  // could hide triggers, jobs or pass-through from this scan, and computed or
+  // whole-context access to the secrets context cannot be attributed to a name.
   lines.forEach((l, i) => {
-    if (/^\s*(-\s+)?['"][\w-]+['"]\s*:/.test(l) || /<<:|:\s*[&*][\w-]+/.test(l)) {
+    if (
+      /^\s*(?:-\s+)?(?:'[^']*'|"(?:[^"\\]|\\.)*")\s*:(\s|$)/.test(l) ||
+      /<<:|:\s*[&*][\w-]+/.test(l)
+    ) {
       errors.push(`${name}:${i + 1}: quoted keys, anchors and aliases are not supported in workflows`);
     }
-    if (/\bsecrets\s*\[\s*(?!['"][\w-]+['"]\s*\])|\(\s*secrets\s*[,)]/i.test(l)) {
-      errors.push(`${name}:${i + 1}: computed or whole-context access to secrets is not supported`);
-    }
   });
+  if (
+    /\bsecrets\s*(?:\.\s*\*|\[\s*(?!['"][\w-]+['"]\s*\]))|\(\s*secrets\s*[,)]/i.test(body)
+  ) {
+    errors.push(`${name}: computed or whole-context access to secrets is not supported`);
+  }
 
   const secretJobs = jobs.filter((j) => secretRef.test(j.body.join('\n')));
   if (secretJobs.length && !prTriggered.length) {
@@ -167,22 +180,20 @@ export function checkWorkflow(name, text) {
   }
 
   // References must sit inside job bodies: a workflow-level `env:` would bypass the job checks.
-  const inJobs = secretJobs.reduce(
-    (n, j) => n + j.body.filter((l) => secretRef.test(l)).length,
-    0,
-  );
-  if (lines.filter((l) => secretRef.test(l)).length !== inJobs) {
+  const count = (t) => (t.match(new RegExp(secretRef.source, 'gi')) ?? []).length;
+  const inJobs = secretJobs.reduce((n, j) => n + count(j.body.join('\n')), 0);
+  if (count(body) !== inJobs) {
     errors.push(`${name}: publish secrets may only be referenced inside a job, not at workflow level`);
   }
 
   for (const job of secretJobs) {
-    const body = job.body.join('\n');
+    const jobBody = job.body.join('\n');
     if (prTriggered.length) continue; // already reported above
-    if (!/^ {4}environment:\s*release\s*$/m.test(body)) {
+    if (!/^ {4}environment:\s*release\s*$/m.test(jobBody)) {
       errors.push(`${name}: job "${job.id}" references a publish secret without "environment: release"`);
     }
     if (dispatchable || callable) {
-      const cond = jobIf(body);
+      const cond = jobIf(jobBody);
       if (cond === null || !isMainGuard(cond)) {
         errors.push(
           `${name}: job "${job.id}" can be dispatched or called from any ref but has no plain job-level "if: github.ref == 'refs/heads/main'" guard (no ||)`,
