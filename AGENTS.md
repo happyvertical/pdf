@@ -66,7 +66,5 @@
   (likewise `NPM_TOKEN`); an environment secret takes precedence over an
   organisation secret of the same name, which is otherwise readable by any
   same-repository pull-request workflow.
-  `scripts/verify-publish-environment.mjs` (run by `Publish Dry Run`) enforces
-  all of this.
 - Keep OCR behavior behind `@happyvertical/ocr`. Dependencies still install from
   npmjs, which the primary registry mirrors.
