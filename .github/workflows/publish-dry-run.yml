@@ -76,4 +76,14 @@ jobs:
           echo "Authenticated to $RELEASE_PRIMARY_REGISTRY as $who"
           npm view @happyvertical/ocr version "${args[@]}" > /dev/null
           echo "Scoped dependencies resolve through $RELEASE_PRIMARY_REGISTRY"
-          npm publish "$TARBALL" "${args[@]}" --access public --dry-run
+          # The dry run asks the registry about the version, and the checked-in
+          # version is already published, so "cannot publish over" is the
+          # expected answer: it proves the token and the registry were reached.
+          if out=$(npm publish "$TARBALL" "${args[@]}" --access public --dry-run 2>&1); then
+            echo "Dry-run publish accepted by $RELEASE_PRIMARY_REGISTRY"
+          elif printf '%s' "$out" | grep -qi 'cannot publish over'; then
+            echo "Registry reached; the checked-in version is already published (expected)"
+          else
+            printf '%s\n' "$out"
+            exit 1
+          fi
