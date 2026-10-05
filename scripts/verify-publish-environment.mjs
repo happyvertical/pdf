@@ -25,7 +25,7 @@ const names = SECRETS.join('|');
 // secrets.NAME and secrets['NAME'] / secrets["NAME"]; names are case-insensitive.
 const secretRef = new RegExp(
   `secrets\\s*(?:\\.\\s*(?:${names})\\b|\\[\\s*['"](?:${names})['"]\\s*\\])`,
-  'i',
+  'i'
 );
 const ALLOWED_EVENTS = [
   'push',
@@ -41,7 +41,11 @@ function eventBlock(triggers, event) {
   const i = ls.findIndex((l) => new RegExp(`^ {2}${event}:`).test(l));
   if (i < 0) return null;
   const out = [ls[i]];
-  for (let j = i + 1; j < ls.length && (/^ {3,}/.test(ls[j]) || ls[j].trim() === ''); j++) {
+  for (
+    let j = i + 1;
+    j < ls.length && (/^ {3,}/.test(ls[j]) || ls[j].trim() === '');
+    j++
+  ) {
     out.push(ls[j]);
   }
   return out.join('\n');
@@ -51,8 +55,11 @@ function jobIf(body) {
   const ls = body.split('\n');
   const i = ls.findIndex((l) => /^ {4}if:/.test(l));
   if (i < 0) return null;
-  let cond = ls[i].replace(/^ {4}if:\s*[>|][-+]?\s*/, '').replace(/^ {4}if:\s*/, '');
-  for (let j = i + 1; j < ls.length && /^ {5,}/.test(ls[j]); j++) cond += ` ${ls[j].trim()}`;
+  let cond = ls[i]
+    .replace(/^ {4}if:\s*[>|][-+]?\s*/, '')
+    .replace(/^ {4}if:\s*/, '');
+  for (let j = i + 1; j < ls.length && /^ {5,}/.test(ls[j]); j++)
+    cond += ` ${ls[j].trim()}`;
   return cond;
 }
 
@@ -80,7 +87,10 @@ function pushBranches(push) {
   const m = /^( *)branches:\s*$/m.exec(push);
   if (!m) return null;
   const items = [];
-  for (const l of push.slice(m.index + m[0].length).split('\n').slice(1)) {
+  for (const l of push
+    .slice(m.index + m[0].length)
+    .split('\n')
+    .slice(1)) {
     if (l.trim() === '') continue; // comments are blanked before parsing
     const it = /^\s*-\s*(.*?)\s*$/.exec(l);
     if (!it) break;
@@ -100,7 +110,10 @@ function structural(lines) {
       blockIndent = -1;
     }
     const code = l.replace(/(^|\s)#.*$/, '');
-    if (/:\s*[|>][-+0-9]*\s*$/.test(code) || /^\s*-\s*[|>][-+0-9]*\s*$/.test(code)) {
+    if (
+      /:\s*[|>][-+0-9]*\s*$/.test(code) ||
+      /^\s*-\s*[|>][-+0-9]*\s*$/.test(code)
+    ) {
       blockIndent = indent;
     }
     out.push({ l, i });
@@ -110,9 +123,7 @@ function structural(lines) {
 
 export function checkWorkflow(name, text) {
   const errors = [];
-  const lines = text
-    .split('\n')
-    .map((l) => (/^\s*#/.test(l) ? '' : l));
+  const lines = text.split('\n').map((l) => (/^\s*#/.test(l) ? '' : l));
 
   // Triggers: the `on:` block (or an inline `on: [a, b]` / `on: a`).
   const onIdx = lines.findIndex((l) => /^["']?on["']?:/.test(l));
@@ -127,7 +138,8 @@ export function checkWorkflow(name, text) {
   if (onIdx >= 0 && /^["']?on["']?:\s*[^\s#]/.test(lines[onIdx])) {
     errors.push(`${name}: use a block-style "on:" so triggers can be verified`);
   }
-  const has = (event) => new RegExp(`(^|[\\s\\[,:])${event}\\b`, 'm').test(triggers);
+  const has = (event) =>
+    new RegExp(`(^|[\\s\\[,:])${event}\\b`, 'm').test(triggers);
   const prTriggered = PR_EVENTS.filter(has);
   const dispatchable = has('workflow_dispatch');
   const callable = has('workflow_call');
@@ -149,20 +161,26 @@ export function checkWorkflow(name, text) {
   const anyRef = new RegExp(secretRef.source, 'gi');
   if (prTriggered.length) {
     if (anyRef.test(body)) {
-      errors.push(`${name}: triggered by ${prTriggered.join('/')} but references a publish secret`);
+      errors.push(
+        `${name}: triggered by ${prTriggered.join('/')} but references a publish secret`
+      );
     }
     // Only literal lookups (secrets.NAME, secrets['NAME']) may remain in a pull-request
     // workflow: pass-through (`secrets: inherit`, any spelling), wildcards, computed and
     // whole-context access cannot be attributed to a name.
     const code = [
       ...[...body.matchAll(/\$\{\{[\s\S]*?\}\}/g)].map((m) => m[0]),
-      ...structural(lines).flatMap(({ l }) => l.match(/\bsecrets\s*:.*$/i) ?? []),
+      ...structural(lines).flatMap(
+        ({ l }) => l.match(/\bsecrets\s*:.*$/i) ?? []
+      ),
     ].join('\n');
     const residual = code
       .replace(/secrets\s*\.\s*[A-Za-z_][\w-]*/gi, '')
       .replace(/secrets\s*\[\s*['"][\w-]+['"]\s*\]/gi, '');
     if (/\bsecrets\b/i.test(residual)) {
-      errors.push(`${name}: pull-request workflow uses the secrets context beyond literal lookups`);
+      errors.push(
+        `${name}: pull-request workflow uses the secrets context beyond literal lookups`
+      );
     }
   }
 
@@ -176,20 +194,32 @@ export function checkWorkflow(name, text) {
     // A quoted list item (`- 'path'`) is a plain scalar unless its closing quote is
     // missing (a multi-line key) or is followed by a colon (a key).
     const listQuote = /^\s*-\s+(['"])/.exec(l);
-    const listScalar = listQuote && new RegExp(`^\\s*-\\s+${listQuote[1]}[^${listQuote[1]}]*${listQuote[1]}\\s*(,|$)`).test(l);
+    const listScalar =
+      listQuote &&
+      new RegExp(
+        `^\\s*-\\s+${listQuote[1]}[^${listQuote[1]}]*${listQuote[1]}\\s*(,|$)`
+      ).test(l);
     const startsOdd = listQuote
       ? !listScalar
       : /^\s*(?:-\s+)?['"&*!?%]/.test(l);
-    if (startsOdd || /<<:|:\s*[&*!][\w-]+/.test(l) || /^\s*-\s+[&*!?%]/.test(l)) {
+    if (
+      startsOdd ||
+      /<<:|:\s*[&*!][\w-]+/.test(l) ||
+      /^\s*-\s+[&*!?%]/.test(l)
+    ) {
       errors.push(
-        `${name}:${i + 1}: quoted or anchored keys, aliases, tags and complex keys are not supported in workflows`,
+        `${name}:${i + 1}: quoted or anchored keys, aliases, tags and complex keys are not supported in workflows`
       );
     }
   }
   if (
-    /\bsecrets\s*(?:\.\s*\*|\[\s*(?!['"][\w-]+['"]\s*\]))|\(\s*secrets\s*[,)]/i.test(body)
+    /\bsecrets\s*(?:\.\s*\*|\[\s*(?!['"][\w-]+['"]\s*\]))|\(\s*secrets\s*[,)]/i.test(
+      body
+    )
   ) {
-    errors.push(`${name}: computed or whole-context access to secrets is not supported`);
+    errors.push(
+      `${name}: computed or whole-context access to secrets is not supported`
+    );
   }
 
   const secretJobs = jobs.filter((j) => secretRef.test(j.body.join('\n')));
@@ -197,41 +227,54 @@ export function checkWorkflow(name, text) {
     const events = [...triggers.matchAll(/^ {2}([\w-]+):/gm)].map((m) => m[1]);
     for (const e of events) {
       if (!ALLOWED_EVENTS.includes(e)) {
-        errors.push(`${name}: publish-secret workflow has unsupported trigger "${e}"`);
+        errors.push(
+          `${name}: publish-secret workflow has unsupported trigger "${e}"`
+        );
       }
     }
-    if (events.length === 0) errors.push(`${name}: could not read the "on:" triggers`);
+    if (events.length === 0)
+      errors.push(`${name}: could not read the "on:" triggers`);
     const push = eventBlock(triggers, 'push');
-    if (has('push') && !push) errors.push(`${name}: could not read the push trigger`);
+    if (has('push') && !push)
+      errors.push(`${name}: could not read the push trigger`);
     if (push) {
       const branches = pushBranches(push);
       if (!branches || branches.length !== 1 || branches[0] !== 'main') {
-        errors.push(`${name}: push trigger must be restricted to exactly "branches: [main]"`);
+        errors.push(
+          `${name}: push trigger must be restricted to exactly "branches: [main]"`
+        );
       }
       if (/(branches-ignore|tags|tags-ignore):/.test(push)) {
-        errors.push(`${name}: push trigger must not use branches-ignore or tags filters`);
+        errors.push(
+          `${name}: push trigger must not use branches-ignore or tags filters`
+        );
       }
     }
   }
 
   // References must sit inside job bodies: a workflow-level `env:` would bypass the job checks.
-  const count = (t) => (t.match(new RegExp(secretRef.source, 'gi')) ?? []).length;
+  const count = (t) =>
+    (t.match(new RegExp(secretRef.source, 'gi')) ?? []).length;
   const inJobs = secretJobs.reduce((n, j) => n + count(j.body.join('\n')), 0);
   if (count(body) !== inJobs) {
-    errors.push(`${name}: publish secrets may only be referenced inside a job, not at workflow level`);
+    errors.push(
+      `${name}: publish secrets may only be referenced inside a job, not at workflow level`
+    );
   }
 
   for (const job of secretJobs) {
     const jobBody = job.body.join('\n');
     if (prTriggered.length) continue; // already reported above
     if (!/^ {4}environment:\s*release\s*$/m.test(jobBody)) {
-      errors.push(`${name}: job "${job.id}" references a publish secret without "environment: release"`);
+      errors.push(
+        `${name}: job "${job.id}" references a publish secret without "environment: release"`
+      );
     }
     if (dispatchable || callable) {
       const cond = jobIf(jobBody);
       if (cond === null || !isMainGuard(cond)) {
         errors.push(
-          `${name}: job "${job.id}" can be dispatched or called from any ref but has no plain job-level "if: github.ref == 'refs/heads/main'" guard (no ||)`,
+          `${name}: job "${job.id}" can be dispatched or called from any ref but has no plain job-level "if: github.ref == 'refs/heads/main'" guard (no ||)`
         );
       }
     }
