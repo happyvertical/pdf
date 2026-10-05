@@ -207,8 +207,9 @@ jobs:
         if: steps.version-check.outputs.changed == 'true'
         run: |
           git tag "v${{ steps.version-check.outputs.version }}"
-          git push origin main
-          git push origin "v${{ steps.version-check.outputs.version }}"
+          # Atomic: the version commit and its tag land together or not at
+          # all, so a rerun never meets a pushed commit without its tag.
+          git push --atomic origin main "v${{ steps.version-check.outputs.version }}"
 
       - name: Upload release tarball
         if: steps.version-check.outputs.changed == 'true'
