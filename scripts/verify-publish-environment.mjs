@@ -105,6 +105,9 @@ export function checkWorkflow(name, text) {
       triggers += `\n${lines[i]}`;
     }
   }
+  if (onIdx >= 0 && /^["']?on["']?:\s*[^\s#]/.test(lines[onIdx])) {
+    errors.push(`${name}: use a block-style "on:" so triggers can be verified`);
+  }
   const has = (event) => new RegExp(`(^|[\\s\\[,:])${event}\\b`, 'm').test(triggers);
   const prTriggered = PR_EVENTS.filter(has);
   const dispatchable = has('workflow_dispatch');
@@ -132,7 +135,11 @@ export function checkWorkflow(name, text) {
     // Only literal lookups (secrets.NAME, secrets['NAME']) may remain in a pull-request
     // workflow: pass-through (`secrets: inherit`, any spelling), wildcards, computed and
     // whole-context access cannot be attributed to a name.
-    const residual = body
+    const code = [
+      ...body.matchAll(/\$\{\{[\s\S]*?\}\}/g),
+      ...body.matchAll(/^\s*(?:-\s+)?secrets\s*:.*$/gim),
+    ].map((m) => m[0]).join('\n');
+    const residual = code
       .replace(/secrets\s*\.\s*[A-Za-z_][\w-]*/gi, '')
       .replace(/secrets\s*\[\s*['"][\w-]+['"]\s*\]/gi, '');
     if (/\bsecrets\b/i.test(residual)) {
@@ -153,7 +160,10 @@ export function checkWorkflow(name, text) {
       if (l.trim() === '' || indent > blockIndent) return;
       blockIndent = -1;
     }
-    if (/:\s*[|>][-+0-9]*\s*$/.test(l) || /^\s*-\s*[|>][-+0-9]*\s*$/.test(l)) blockIndent = indent;
+    const code = l.replace(/(^|\s)#.*$/, '');
+    if (/:\s*[|>][-+0-9]*\s*$/.test(code) || /^\s*-\s*[|>][-+0-9]*\s*$/.test(code)) {
+      blockIndent = indent;
+    }
     // A quoted list item (`- 'path'`) is a plain scalar unless its closing quote is
     // missing (a multi-line key) or is followed by a colon (a key).
     const listQuote = /^\s*-\s+(['"])/.exec(l);
@@ -176,8 +186,6 @@ export function checkWorkflow(name, text) {
   const secretJobs = jobs.filter((j) => secretRef.test(j.body.join('\n')));
   if (secretJobs.length && !prTriggered.length) {
     const events = [...triggers.matchAll(/^ {2}([\w-]+):/gm)].map((m) => m[1]);
-    const inline = /^["']?on["']?:\s*\S/.test(lines[onIdx] ?? '');
-    if (inline) errors.push(`${name}: use a block-style "on:" so triggers can be verified`);
     for (const e of events) {
       if (!ALLOWED_EVENTS.includes(e)) {
         errors.push(`${name}: publish-secret workflow has unsupported trigger "${e}"`);

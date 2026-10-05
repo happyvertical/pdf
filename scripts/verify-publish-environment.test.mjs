@@ -133,3 +133,12 @@ test('multi-line quoted keys, anchored keys and complex keys are rejected', () =
   assert.deepEqual(check({ on: `${PUSH_MAIN}\n    paths:\n      - 'a/**'\n      - "b"`, job: OK_JOB }), []);
   assert.equal(check({ on: '  push: {branches: [dev]}', job: OK_JOB }).length >= 1, true);
 });
+
+test('prose that mentions secrets is not an error; forged comments and flow-map triggers are', () => {
+  const pr = (job) => check({ on: '  pull_request:', job });
+  assert.deepEqual(pr('    steps:\n      - name: Document secrets\n        run: echo "no secrets here"'), []);
+  const forged = 'name: t\non: # : |\n  "pull_request":\njobs:\n  j:\n    uses: ./x.yml\n    secrets: inherit\n';
+  assert.ok(checkWorkflow('t.yml', forged).length >= 1);
+  const flow = 'name: t\non: {pull_request: {}}\njobs:\n  j:\n    uses: ./x.yml\n    secrets: inherit\n';
+  assert.ok(checkWorkflow('t.yml', flow).length >= 1);
+});
