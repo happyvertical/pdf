@@ -6,11 +6,11 @@ name: Publish Dry Run
 # NO SECRETS: this workflow runs on pull_request, where GitHub uses the pull
 # request's OWN copy of the workflow file, so any secret it referenced could
 # be read by whoever edits that file. No pull-request workflow in this
-# repository may reference a publish secret (NPM_HAPPYVERTICAL_PUBLISH_TOKEN,
-# NPM_TOKEN). Token authentication is proven where the secret legitimately
-# lives: the first credentialed step of the Publish workflow on main
-# (`npm whoami`), before any versioning, tagging or publishing. This check only
-# proves what needs no credential: build, pack, and registry resolution.
+# repository may reference a publish secret. The secrets live in the `release`
+# Environment, restricted to main (iac#2165). Token authentication is proven
+# where they legitimately live: the first credentialed step of the Publish
+# workflow on main, before any versioning, tagging or publishing. This check
+# only proves what needs no credential: build, pack, and registry resolution.
 
 on:
   pull_request:
