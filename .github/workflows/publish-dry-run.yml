@@ -3,13 +3,14 @@ name: Publish Dry Run
 # Proves, without publishing, that a release can authenticate to and resolve
 # against the primary registry (npm.happyvertical.com) (#137).
 #
-# SECRET HANDLING: only the `auth` job holds NPM_HAPPYVERTICAL_PUBLISH_TOKEN.
-# It does no checkout, installs nothing and runs no repository code: its one
-# credentialed step is an inline `npm whoami` against a hard-coded host. Code
-# a pull request can change (scripts, package scripts, lifecycle hooks, the
-# build) runs only in the `pack` job, which has no secrets at all. Do not
-# switch this workflow to `pull_request_target`, and do not add a checkout or
-# any repository script to the `auth` job.
+# NO SECRETS: this workflow runs on pull_request, where GitHub uses the pull
+# request's OWN copy of the workflow file, so any secret it referenced could
+# be read by whoever edits that file. No pull-request workflow in this
+# repository may reference a publish secret (NPM_HAPPYVERTICAL_PUBLISH_TOKEN,
+# NPM_TOKEN). Token authentication is proven where the secret legitimately
+# lives: the first credentialed step of the Publish workflow on main
+# (`npm whoami`), before any versioning, tagging or publishing. This check only
+# proves what needs no credential: build, pack, and registry resolution.
 
 on:
   pull_request:
@@ -29,29 +30,6 @@ permissions:
   contents: read
 
 jobs:
-  # Holds the token. Trusted inline commands only; no checkout, no install.
-  auth:
-    name: Primary Registry Auth
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
-    timeout-minutes: 5
-    steps:
-      - name: Authenticate to the primary registry
-        env:
-          PRIMARY_TOKEN: ${{ secrets.NPM_HAPPYVERTICAL_PUBLISH_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${PRIMARY_TOKEN:-}" ]; then
-            echo "::warning::NPM_HAPPYVERTICAL_PUBLISH_TOKEN is not available to this run (for example a fork); primary registry auth was not checked"
-            exit 0
-          fi
-          registry=https://npm.happyvertical.com/
-          rc="$RUNNER_TEMP/release-npmrc"
-          umask 077
-          printf '//npm.happyvertical.com/:_authToken=%s\n' "$PRIMARY_TOKEN" > "$rc"
-          who=$(NPM_CONFIG_USERCONFIG="$rc" npm whoami --registry "$registry" "--@happyvertical:registry=$registry")
-          echo "Authenticated to $registry as $who"
-
-  # Runs pull-request code; has no secrets.
   pack:
     name: Pack and Resolve
     runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}

@@ -54,8 +54,12 @@
   and the version must be bumped), and an existing tag must have the expected
   tree. npmjs is a separate non-blocking job (`NPM_TOKEN`) that publishes the
   exact tarball the primary serves, integrity-checked. The allowed hosts live in
-  `scripts/release-registry.mjs`. In `Publish Dry Run` only the `auth` job holds
-  the token and runs no repository code; PR code runs in the secretless `pack`
-  job. Never give the token to a step that runs repository code from a PR.
+  `scripts/release-registry.mjs`. No pull-request workflow may reference a
+  publish secret (a PR runs its own copy of the workflow file, so it could read
+  it); `Publish Dry Run` is secretless (build, pack, registry resolution), and
+  the token is proven by `npm whoami`, the first credentialed step of the
+  Publish workflow on `main`. Owner follow-up: move the publish secrets to a
+  GitHub Environment restricted to `main`; an organisation secret is otherwise
+  readable by any same-repository pull-request workflow.
 - Keep OCR behavior behind `@happyvertical/ocr`. Dependencies still install from
   npmjs, which the primary registry mirrors.

@@ -90,6 +90,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      # Write a fresh npmrc holding only the primary's credential and point
+      # npm at it for the rest of the job; never append to setup-node's file
+      # (it ends without a newline, so an appended line fuses onto its last
+      # line and the token is silently never a credential: smrt#3005).
+      # `npm whoami` proves the token against the primary before anything
+      # irreversible. It runs before any versioning, tagging or publishing, so a
+      # bad token fails the release at the start.
+      - name: Authenticate to the primary registry
+        env:
+          PRIMARY_TOKEN: ${{ secrets.NPM_HAPPYVERTICAL_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PRIMARY_TOKEN:-}" ]; then
+            echo "::error::NPM_HAPPYVERTICAL_PUBLISH_TOKEN is required to publish to $RELEASE_PRIMARY_REGISTRY"
+            exit 1
+          fi
+          # Refuse any host outside the reviewed allowlist BEFORE the token is
+          # written for it or sent to it.
+          node --input-type=module -e "import { primaryRegistry } from './scripts/release-registry.mjs'; primaryRegistry();"
+          host="${RELEASE_PRIMARY_REGISTRY#https://}"
+          host="${host%/}"
+          rc="$RUNNER_TEMP/release-npmrc"
+          umask 077
+          printf '//%s/:_authToken=%s\n' "$host" "$PRIMARY_TOKEN" > "$rc"
+          echo "NPM_CONFIG_USERCONFIG=$rc" >> "$GITHUB_ENV"
+          export NPM_CONFIG_USERCONFIG="$rc"
+          who=$(npm whoami --registry "$RELEASE_PRIMARY_REGISTRY" \
+            "--@happyvertical:registry=$RELEASE_PRIMARY_REGISTRY")
+          echo "Authenticated to $RELEASE_PRIMARY_REGISTRY as $who"
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
@@ -149,36 +179,6 @@ jobs:
           mapfile -t tarballs < <(find "$RUNNER_TEMP/release-pack" -name '*.tgz')
           [ "${#tarballs[@]}" -eq 1 ]
           echo "TARBALL=${tarballs[0]}" >> "$GITHUB_ENV"
-
-      # Write a fresh npmrc holding only the primary's credential and point
-      # npm at it for the rest of the job; never append to setup-node's file
-      # (it ends without a newline, so an appended line fuses onto its last
-      # line and the token is silently never a credential: smrt#3005).
-      # `npm whoami` proves the token against the primary before anything
-      # irreversible.
-      - name: Authenticate to the primary registry
-        if: steps.version-check.outputs.changed == 'true'
-        env:
-          PRIMARY_TOKEN: ${{ secrets.NPM_HAPPYVERTICAL_PUBLISH_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${PRIMARY_TOKEN:-}" ]; then
-            echo "::error::NPM_HAPPYVERTICAL_PUBLISH_TOKEN is required to publish to $RELEASE_PRIMARY_REGISTRY"
-            exit 1
-          fi
-          # Refuse any host outside the reviewed allowlist BEFORE the token is
-          # written for it or sent to it.
-          node --input-type=module -e "import { primaryRegistry } from './scripts/release-registry.mjs'; primaryRegistry();"
-          host="${RELEASE_PRIMARY_REGISTRY#https://}"
-          host="${host%/}"
-          rc="$RUNNER_TEMP/release-npmrc"
-          umask 077
-          printf '//%s/:_authToken=%s\n' "$host" "$PRIMARY_TOKEN" > "$rc"
-          echo "NPM_CONFIG_USERCONFIG=$rc" >> "$GITHUB_ENV"
-          export NPM_CONFIG_USERCONFIG="$rc"
-          who=$(npm whoami --registry "$RELEASE_PRIMARY_REGISTRY" \
-            "--@happyvertical:registry=$RELEASE_PRIMARY_REGISTRY")
-          echo "Authenticated to $RELEASE_PRIMARY_REGISTRY as $who"
 
       # Decide what is left to do, so a rerun after a partial failure resumes
       # instead of failing or diverging. Identity is bound to CONTENT, not to
