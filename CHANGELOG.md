@@ -1,5 +1,11 @@
 # @happyvertical/pdf
 
+## 0.65.10
+
+### Patch Changes
+
+- 0b3f92d: Publish releases to the organisation registry (npm.happyvertical.com) and mirror them to npmjs.
+
 ## 0.65.9
 
 ### Patch Changes
