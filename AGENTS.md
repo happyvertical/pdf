@@ -48,9 +48,14 @@
 
 - Releases publish `@happyvertical/pdf` to the primary registry
   `https://npm.happyvertical.com/` with `NPM_HAPPYVERTICAL_PUBLISH_TOKEN`; the
-  version commit and tag are pushed only after that publish succeeds. npmjs is a
-  separate, non-blocking mirror job using `NPM_TOKEN`. The allowed hosts live in
-  `scripts/release-registry.mjs`; the `Publish Dry Run` workflow proves auth and
-  registry resolution on pull requests without publishing.
+  version commit and tag are pushed atomically, only after that publish
+  succeeds. A rerun resumes: a version already on the primary must have the
+  same `dist.integrity` as the freshly packed tarball (otherwise the job stops
+  and the version must be bumped), and an existing tag must have the expected
+  tree. npmjs is a separate non-blocking job (`NPM_TOKEN`) that publishes the
+  exact tarball the primary serves, integrity-checked. The allowed hosts live in
+  `scripts/release-registry.mjs`. In `Publish Dry Run` only the `auth` job holds
+  the token and runs no repository code; PR code runs in the secretless `pack`
+  job. Never give the token to a step that runs repository code from a PR.
 - Keep OCR behavior behind `@happyvertical/ocr`. Dependencies still install from
   npmjs, which the primary registry mirrors.

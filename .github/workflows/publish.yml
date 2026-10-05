@@ -180,9 +180,14 @@ jobs:
             "--@happyvertical:registry=$RELEASE_PRIMARY_REGISTRY")
           echo "Authenticated to $RELEASE_PRIMARY_REGISTRY as $who"
 
-      # Idempotent: a rerun after the version already reached the primary
-      # (for example the tag push failed) skips the publish instead of failing.
-      - name: Publish to the primary registry
+      # Decide what is left to do, so a rerun after a partial failure resumes
+      # instead of failing or diverging. Identity is bound to CONTENT, not to
+      # the version string: if this version is already on the primary, its
+      # integrity must equal the freshly packed tarball's (a resume);
+      # otherwise something else was published under this version and we STOP
+      # before tagging, releasing or mirroring. The operator bumps the version.
+      - name: Resolve release state
+        id: state
         if: steps.version-check.outputs.changed == 'true'
         env:
           VERSION: ${{ steps.version-check.outputs.version }}
@@ -190,50 +195,70 @@ jobs:
           set -euo pipefail
           name=$(node -p "require('./package.json').name")
           args=(--registry "$RELEASE_PRIMARY_REGISTRY" "--@happyvertical:registry=$RELEASE_PRIMARY_REGISTRY")
-          if out=$(npm view "$name@$VERSION" version "${args[@]}" --prefer-online 2>&1); then
-            if [ "$out" = "$VERSION" ]; then
-              echo "$name@$VERSION is already on $RELEASE_PRIMARY_REGISTRY; skipping publish"
-              exit 0
+          local_integrity="sha512-$(openssl dgst -sha512 -binary "$TARBALL" | base64 -w0)"
+          if out=$(npm view "$name@$VERSION" dist.integrity "${args[@]}" --prefer-online 2>&1); then
+            if [ "$out" != "$local_integrity" ]; then
+              echo "::error::$name@$VERSION is already on $RELEASE_PRIMARY_REGISTRY with different contents than this run built. Refusing to tag, release or mirror; bump the version."
+              exit 1
             fi
-          elif ! printf '%s' "$out" | grep -qE 'E404|404 Not Found'; then
-            echo "::error::could not read $name from $RELEASE_PRIMARY_REGISTRY"
+            echo "$name@$VERSION is already on the primary with identical contents; resuming"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$out" | grep -qE 'E404|404 Not Found'; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::could not read $name@$VERSION from $RELEASE_PRIMARY_REGISTRY"
             exit 1
           fi
-          npm publish "$TARBALL" "${args[@]}" --access public
+          # An already-pushed tag must point at the commit tree this run would
+          # produce; the version commit and tag are pushed atomically, so the
+          # tag existing means both landed.
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ]; then
+            git fetch --no-tags origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            if [ "$(git rev-parse "v$VERSION^{tree}")" != "$(git rev-parse 'HEAD^{tree}')" ]; then
+              echo "::error::tag v$VERSION exists but its tree differs from the release this run built. Refusing to continue; bump the version."
+              exit 1
+            fi
+            echo "tag v$VERSION already exists with the expected tree; resuming"
+            echo "tagged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tagged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to the primary registry
+        if: steps.version-check.outputs.changed == 'true' && steps.state.outputs.publish == 'true'
+        run: |
+          npm publish "$TARBALL" --registry "$RELEASE_PRIMARY_REGISTRY" \
+            "--@happyvertical:registry=$RELEASE_PRIMARY_REGISTRY" --access public
 
       # Tag and push only after the primary has the version, so a failed
-      # publish never leaves a tag or version commit behind.
+      # publish never leaves a tag or version commit behind. Atomic: the
+      # version commit and its tag land together or not at all.
       - name: Push changes and tag
-        if: steps.version-check.outputs.changed == 'true'
+        if: steps.version-check.outputs.changed == 'true' && steps.state.outputs.tagged != 'true'
         run: |
           git tag "v${{ steps.version-check.outputs.version }}"
-          # Atomic: the version commit and its tag land together or not at
-          # all, so a rerun never meets a pushed commit without its tag.
           git push --atomic origin main "v${{ steps.version-check.outputs.version }}"
-
-      - name: Upload release tarball
-        if: steps.version-check.outputs.changed == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: release-tarball
-          path: ${{ env.TARBALL }}
-          retention-days: 7
-          if-no-files-found: error
 
       - name: Create GitHub Release
         if: steps.version-check.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          if gh release view "v${{ steps.version-check.outputs.version }}" >/dev/null 2>&1; then
+            echo "Release already exists"
+            exit 0
+          fi
           gh release create "v${{ steps.version-check.outputs.version }}" \
             --title "v${{ steps.version-check.outputs.version }}" \
             --generate-notes
 
   # A release is complete once it is on the primary. Mirroring it to npmjs is
-  # a separate job that publishes the exact tarball the primary received. It
-  # never fails the release (continue-on-error), but it never reports success
-  # it did not reach: it re-reads npmjs afterwards and goes red with an error
-  # annotation if the version is missing.
+  # a separate job that publishes exactly the tarball the PRIMARY serves for
+  # this version (downloaded and integrity-checked, never re-packed), so the
+  # two registries cannot diverge. It never fails the release
+  # (continue-on-error), but it never reports success it did not reach: it
+  # re-reads npmjs afterwards and goes red if the version is missing or its
+  # bytes differ.
   mirror-npmjs:
     name: Mirror Release to npmjs
     needs: release
@@ -244,12 +269,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Download release tarball
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: release-tarball
-          path: release-tarball
-
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -264,17 +283,31 @@ jobs:
           set -euo pipefail
           name="@happyvertical/pdf"
           npmjs=https://registry.npmjs.org/
+          primary_args=(--registry "$RELEASE_PRIMARY_REGISTRY" "--@happyvertical:registry=$RELEASE_PRIMARY_REGISTRY")
           args=(--registry "$npmjs" "--@happyvertical:registry=$npmjs")
           fail() {
-            echo "::error::NOT MIRRORED: $name@$VERSION is missing from npmjs ($1). The release itself succeeded on $RELEASE_PRIMARY_REGISTRY."
+            echo "::error::NOT MIRRORED: $name@$VERSION ($1). The release itself succeeded on $RELEASE_PRIMARY_REGISTRY."
             exit 1
           }
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then fail "NPM_TOKEN is unavailable"; fi
-          have() { [ "$(npm view "$name@$VERSION" version "${args[@]}" --prefer-online 2>/dev/null || true)" = "$VERSION" ]; }
-          if have; then echo "$name@$VERSION is already on npmjs"; exit 0; fi
-          npm publish release-tarball/*.tgz "${args[@]}" --access public || fail "npm publish failed"
+          primary_integrity=$(npm view "$name@$VERSION" dist.integrity "${primary_args[@]}" --prefer-online) \
+            || fail "could not read the version from the primary"
+          mirror_integrity() { npm view "$name@$VERSION" dist.integrity "${args[@]}" --prefer-online 2>/dev/null || true; }
+          have=$(mirror_integrity)
+          if [ -n "$have" ]; then
+            [ "$have" = "$primary_integrity" ] || fail "npmjs holds different bytes for this version than the primary"
+            echo "$name@$VERSION is already on npmjs with identical contents"
+            exit 0
+          fi
+          mkdir -p mirror-pack
+          (cd mirror-pack && npm pack "$name@$VERSION" "${primary_args[@]}" > /dev/null)
+          tarball=$(find mirror-pack -name '*.tgz')
+          [ "$(printf '%s\n' "$tarball" | wc -l)" -eq 1 ] || fail "expected exactly one downloaded tarball"
+          actual="sha512-$(openssl dgst -sha512 -binary "$tarball" | base64 -w0)"
+          [ "$actual" = "$primary_integrity" ] || fail "downloaded tarball does not match the primary's integrity"
+          npm publish "$tarball" "${args[@]}" --access public || fail "npm publish failed"
           for attempt in 1 2 3 4 5 6; do
-            if have; then echo "Mirrored $name@$VERSION to npmjs"; exit 0; fi
+            if [ "$(mirror_integrity)" = "$primary_integrity" ]; then echo "Mirrored $name@$VERSION to npmjs"; exit 0; fi
             sleep $((attempt * 10))
           done
           fail "not visible after publishing"
