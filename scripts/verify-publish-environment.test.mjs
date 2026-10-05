@@ -55,3 +55,43 @@ test('pull-request workflows reference no publish secret', () => {
   assert.equal(check({ on: '  pull_request:', job: '    uses: ./x.yml\n    secrets: inherit' }).length, 1);
   assert.deepEqual(check({ on: '  pull_request:', job: '    steps:\n      - run: echo hi' }), []);
 });
+
+test('block-style branch lists must be exactly main', () => {
+  const on = '  push:\n    branches:\n      - main\n      - dev';
+  assert.equal(check({ on, job: OK_JOB }).length, 1);
+});
+
+test('the dispatch guard must be an affirmative main-ref condition', () => {
+  const on = `${PUSH_MAIN}\n  workflow_dispatch:`;
+  const guarded = (cond) => `    if: ${cond}\n${OK_JOB}`;
+  for (const bad of [
+    "${{ !(github.ref == 'refs/heads/main') }}",
+    "!(github.ref == 'refs/heads/main')",
+    "github.ref != 'refs/heads/main'",
+    "github.actor == 'x' && github.ref == 'refs/heads/main'",
+  ]) {
+    assert.equal(check({ on, job: guarded(bad) }).length, 1, bad);
+  }
+  for (const good of [
+    "${{ github.ref == 'refs/heads/main' }}",
+    "(github.ref == 'refs/heads/main') && needs.a.outputs.b == 'true'",
+  ]) {
+    assert.deepEqual(check({ on, job: guarded(good) }), [], good);
+  }
+});
+
+test('workflow_call publish workflows need the same guard', () => {
+  assert.equal(check({ on: `${PUSH_MAIN}\n  workflow_call:`, job: OK_JOB }).length, 1);
+});
+
+test('workflow-level references, quoted keys and aliases are rejected', () => {
+  const top = `name: t\non:\n${PUSH_MAIN}\nenv:\n  T: \${{ secrets.NPM_TOKEN }}\njobs:\n  publish:\n    runs-on: x\n`;
+  assert.ok(checkWorkflow('t.yml', top).length >= 1);
+  const quoted = wf({ on: PUSH_MAIN, job: OK_JOB }).replace('  publish:', "  'publish':");
+  assert.ok(checkWorkflow('t.yml', quoted).length >= 1);
+  assert.equal(check({ on: PUSH_MAIN, job: `${OK_JOB}\n    x: &a 1` }).length, 1);
+  assert.equal(
+    check({ on: '  pull_request:', job: '    uses: ./x.yml\n    secrets: "inherit"' }).length,
+    1,
+  );
+});
