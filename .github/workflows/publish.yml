@@ -29,6 +29,11 @@ jobs:
   release:
     name: Version and Publish
     needs: test
+    # Publish credentials live in the `release` Environment, whose deployment
+    # branch rule allows only main (iac#2165); a dispatch from another ref
+    # is skipped here and would be refused by the Environment anyway.
+    if: github.ref == 'refs/heads/main'
+    environment: release
     runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
     timeout-minutes: 20
     outputs:
@@ -262,7 +267,8 @@ jobs:
   mirror-npmjs:
     name: Mirror Release to npmjs
     needs: release
-    if: needs.release.outputs.published == 'true'
+    if: github.ref == 'refs/heads/main' && needs.release.outputs.published == 'true'
+    environment: release
     runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
     timeout-minutes: 15
     continue-on-error: true

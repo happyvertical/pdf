@@ -6,18 +6,20 @@ name: Publish Dry Run
 # NO SECRETS: this workflow runs on pull_request, where GitHub uses the pull
 # request's OWN copy of the workflow file, so any secret it referenced could
 # be read by whoever edits that file. No pull-request workflow in this
-# repository may reference a publish secret (NPM_HAPPYVERTICAL_PUBLISH_TOKEN,
-# NPM_TOKEN). Token authentication is proven where the secret legitimately
-# lives: the first credentialed step of the Publish workflow on main
-# (`npm whoami`), before any versioning, tagging or publishing. This check only
-# proves what needs no credential: build, pack, and registry resolution.
+# repository may reference a publish secret, and
+# scripts/verify-publish-environment.mjs (run below) fails the build if one
+# does. The secrets live in the `release` Environment, restricted to main
+# (iac#2165). Token authentication is proven where they legitimately live: the
+# first credentialed step of the Publish workflow on main, before any
+# versioning, tagging or publishing. This check only proves what needs no
+# credential: workflow policy, build, pack, and registry resolution.
 
 on:
   pull_request:
     branches: [main]
     paths:
-      - '.github/workflows/publish.yml'
-      - '.github/workflows/publish-dry-run.yml'
+      - '.github/workflows/**'
+      - 'scripts/verify-publish-environment.mjs'
       - 'scripts/release-registry.mjs'
       - 'package.json'
   workflow_dispatch:
@@ -46,6 +48,9 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+
+      - name: Verify publish-secret workflow policy
+        run: node scripts/verify-publish-environment.mjs
 
       - name: Install dependencies
         run: pnpm install

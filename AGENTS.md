@@ -58,8 +58,15 @@
   publish secret (a PR runs its own copy of the workflow file, so it could read
   it); `Publish Dry Run` is secretless (build, pack, registry resolution), and
   the token is proven by `npm whoami`, the first credentialed step of the
-  Publish workflow on `main`. Owner follow-up: move the publish secrets to a
-  GitHub Environment restricted to `main`; an organisation secret is otherwise
-  readable by any same-repository pull-request workflow.
+  Publish workflow on `main`. The publish secrets belong to the `release`
+  GitHub Environment, whose deployment-branch rule allows only `main`
+  (iac#2165): both publish jobs declare `environment: release` and run only on
+  `refs/heads/main`. Store a token with
+  `gh secret set NPM_HAPPYVERTICAL_PUBLISH_TOKEN --env release --repo happyvertical/pdf`
+  (likewise `NPM_TOKEN`); an environment secret takes precedence over an
+  organisation secret of the same name, which is otherwise readable by any
+  same-repository pull-request workflow.
+  `scripts/verify-publish-environment.mjs` (run by `Publish Dry Run`) enforces
+  all of this.
 - Keep OCR behavior behind `@happyvertical/ocr`. Dependencies still install from
   npmjs, which the primary registry mirrors.
