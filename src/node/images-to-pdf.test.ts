@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -342,6 +343,13 @@ describe('imagesToPdf', () => {
       jpeg.subarray(0, sos),
       Buffer.from([0xff, 0xd9]),
     ]);
+    const emptySos = Buffer.concat([
+      jpeg.subarray(0, sos),
+      Buffer.from([0xff, 0xda, 0x00, 0x02, 0x00, 0xff, 0xd9]),
+    ]);
+    await expect(imagesToPdf([emptySos])).rejects.toBeInstanceOf(
+      PDFImageCorruptError,
+    );
     await expect(imagesToPdf([noData])).rejects.toBeInstanceOf(
       PDFImageCorruptError,
     );
@@ -362,6 +370,14 @@ describe('imagesToPdf', () => {
     }).catch((e) => e);
     expect(e2).toMatchObject({ limit: 'maxTotalBytes', index: 1 });
     expect((await pages(await imagesToPdf([file]))).length).toBe(1);
+    // a FIFO with no writer must be refused, not block
+    const fifo = join(dir, 'pipe');
+    execFileSync('mkfifo', [fifo]);
+    const t = Date.now();
+    await expect(imagesToPdf([fifo])).rejects.toBeInstanceOf(
+      PDFImageCorruptError,
+    );
+    expect(Date.now() - t).toBeLessThan(5000);
     await expect(imagesToPdf([dir])).rejects.toBeInstanceOf(
       PDFImageCorruptError,
     );

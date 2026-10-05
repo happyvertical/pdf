@@ -15,6 +15,7 @@
  * `PDFImageLimitExceededError`) and never carry image contents or paths.
  */
 
+import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { crc32, inflate } from 'node:zlib';
@@ -316,6 +317,7 @@ function parseJpeg(b: Uint8Array): ImageInfo {
   let orientation = 1;
   let sawExif = false;
   let scanStart = -1;
+  let frameComps = 0;
   let dims: { width: number; height: number } | undefined;
   // Each iteration consumes at least one byte, so this is O(length).
   while (pos < b.length) {
@@ -346,9 +348,15 @@ function parseJpeg(b: Uint8Array): ImageInfo {
       if (comps !== 1 && comps !== 3 && comps !== 4)
         throw new Corrupt('JPEG components');
       dims = { width, height };
+      frameComps = comps;
     }
     if (m === 0xda) {
-      // start of scan: the headers are behind us
+      // start of scan: its header must be well formed (Ns components, 2 bytes
+      // each), and the headers are then behind us.
+      const ns = b[pos + 2];
+      if (!frameComps || ns < 1 || ns > frameComps || len !== 6 + 2 * ns) {
+        throw new Corrupt('JPEG scan');
+      }
       scanStart = pos + len;
       break;
     }
@@ -447,7 +455,9 @@ async function loadBytes(
   if (typeof input === 'string') {
     let handle: Awaited<ReturnType<typeof open>>;
     try {
-      handle = await open(input, 'r');
+      // Non-blocking so a FIFO or device without a peer cannot stall the
+      // open; the handle is then checked to be a regular file before any read.
+      handle = await open(input, constants.O_RDONLY | constants.O_NONBLOCK);
     } catch {
       throw new PDFImageCorruptError(index, 'unreadable file');
     }
