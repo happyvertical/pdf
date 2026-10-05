@@ -295,6 +295,78 @@ describe('imagesToPdf', () => {
     expect(Date.now() - t).toBeLessThan(30_000);
   });
 
+  /** Insert a CRC-valid chunk right after IHDR. */
+  function withChunk(png: Buffer, type: string, data: Buffer): Buffer {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, 'ascii');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+    return Buffer.concat([
+      png.subarray(0, 33),
+      head,
+      data,
+      crc,
+      png.subarray(33),
+    ]);
+  }
+
+  it('rejects a second IHDR and APNG animation chunks even with valid CRCs', async () => {
+    const png = make('png', 16, 16);
+    const ihdr = Buffer.from(png.subarray(16, 29));
+    ihdr.writeUInt32BE(60000, 0);
+    ihdr.writeUInt32BE(60000, 4);
+    for (const bad of [
+      withChunk(png, 'IHDR', ihdr),
+      withChunk(png, 'acTL', Buffer.alloc(8)),
+      withChunk(png, 'fcTL', Buffer.alloc(26)),
+      withChunk(png, 'fdAT', Buffer.alloc(8)),
+    ]) {
+      await expect(imagesToPdf([bad])).rejects.toBeInstanceOf(
+        PDFImageCorruptError,
+      );
+    }
+  });
+
+  it('rejects a JPEG that has a frame header but no scan data', async () => {
+    const sof = Buffer.from([
+      0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x10, 0x00, 0x10, 0x01,
+      0x01, 0x11, 0x00, 0xff, 0xd9,
+    ]);
+    await expect(imagesToPdf([sof])).rejects.toBeInstanceOf(
+      PDFImageCorruptError,
+    );
+    const jpeg = make('jpeg', 8, 8);
+    const sos = jpeg.indexOf(Buffer.from([0xff, 0xda]));
+    const noData = Buffer.concat([
+      jpeg.subarray(0, sos),
+      Buffer.from([0xff, 0xd9]),
+    ]);
+    await expect(imagesToPdf([noData])).rejects.toBeInstanceOf(
+      PDFImageCorruptError,
+    );
+  });
+
+  it('reads files through a capped handle and applies the remaining total budget', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'img2pdf-'));
+    dirs.push(dir);
+    const png = make('png', 40, 40);
+    const file = join(dir, 'a.bin');
+    await writeFile(file, png);
+    const e1 = await imagesToPdf([file], {
+      maxImageBytes: png.length - 1,
+    }).catch((e) => e);
+    expect(e1).toMatchObject({ limit: 'maxImageBytes', index: 0 });
+    const e2 = await imagesToPdf([png, file], {
+      maxTotalBytes: png.length + 10,
+    }).catch((e) => e);
+    expect(e2).toMatchObject({ limit: 'maxTotalBytes', index: 1 });
+    expect((await pages(await imagesToPdf([file]))).length).toBe(1);
+    await expect(imagesToPdf([dir])).rejects.toBeInstanceOf(
+      PDFImageCorruptError,
+    );
+  });
+
   it('enforces each limit with a typed error', async () => {
     const png = make('png', 40, 40);
     const e1 = await imagesToPdf([png, png, png], { maxImages: 2 }).catch(

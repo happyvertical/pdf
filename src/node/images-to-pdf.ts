@@ -15,7 +15,7 @@
  * `PDFImageLimitExceededError`) and never carry image contents or paths.
  */
 
-import { readFile, stat } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { crc32, inflate } from 'node:zlib';
 
@@ -35,6 +35,7 @@ import {
 import { PDFGenerationError } from '../generation/markdown-pdf';
 import {
   PDFImageCorruptError,
+  PDFImageInputError,
   PDFImageLimitExceededError,
   PDFImageUnsupportedTypeError,
 } from '../shared/types';
@@ -238,6 +239,17 @@ function parsePng(b: Uint8Array): PngInfo {
     ) {
       throw new Corrupt('PNG checksum');
     }
+    // A second IHDR would override the validated dimensions inside pdf-lib's
+    // decoder, and APNG animation chunks make it decode frames this module
+    // does not bound. Neither is a still image this call accepts.
+    if (
+      type === 'IHDR' ||
+      type === 'acTL' ||
+      type === 'fcTL' ||
+      type === 'fdAT'
+    ) {
+      if (pos !== 8 || type !== 'IHDR') throw new Corrupt('PNG chunk');
+    }
     if (type === 'IDAT') idat.push(buf.subarray(pos + 8, pos + 8 + len));
     if (type === 'IEND') {
       sawEnd = true;
@@ -303,6 +315,7 @@ function parseJpeg(b: Uint8Array): ImageInfo {
   let pos = 2;
   let orientation = 1;
   let sawExif = false;
+  let scanStart = -1;
   let dims: { width: number; height: number } | undefined;
   // Each iteration consumes at least one byte, so this is O(length).
   while (pos < b.length) {
@@ -334,15 +347,20 @@ function parseJpeg(b: Uint8Array): ImageInfo {
         throw new Corrupt('JPEG components');
       dims = { width, height };
     }
-    if (m === 0xda) break; // start of scan: the headers are behind us
+    if (m === 0xda) {
+      // start of scan: the headers are behind us
+      scanStart = pos + len;
+      break;
+    }
     pos += len;
   }
   if (!dims) throw new Corrupt('JPEG frame');
+  if (scanStart < 0) throw new Corrupt('JPEG scan');
   // The end-of-image marker must be near the end, otherwise it was cut off.
   const tail = Math.max(2, b.length - 4096);
   let sawEoi = false;
   for (let i = b.length - 2; i >= tail; i--) {
-    if (b[i] === 0xff && b[i + 1] === 0xd9) {
+    if (b[i] === 0xff && b[i + 1] === 0xd9 && i > scanStart) {
       sawEoi = true;
       break;
     }
@@ -413,41 +431,54 @@ async function loadBytes(
   input: ImagesToPdfInput,
   index: number,
   maxBytes: number,
+  remainingTotal: number,
+  maxTotalBytes: number,
 ): Promise<Uint8Array> {
+  const tooBig = (actual: number): PDFImageLimitExceededError =>
+    actual > maxBytes
+      ? new PDFImageLimitExceededError('maxImageBytes', actual, maxBytes, index)
+      : new PDFImageLimitExceededError(
+          'maxTotalBytes',
+          maxTotalBytes - remainingTotal + actual,
+          maxTotalBytes,
+          index,
+        );
+  const cap = Math.min(maxBytes, remainingTotal);
   if (typeof input === 'string') {
-    let size: number;
+    let handle: Awaited<ReturnType<typeof open>>;
     try {
-      const s = await stat(input);
-      if (!s.isFile()) throw new Error('not a file');
-      size = s.size;
+      handle = await open(input, 'r');
     } catch {
       throw new PDFImageCorruptError(index, 'unreadable file');
     }
-    if (size > maxBytes) {
-      throw new PDFImageLimitExceededError(
-        'maxImageBytes',
-        size,
-        maxBytes,
-        index,
-      );
-    }
     try {
-      return await readFile(input);
-    } catch {
+      const s = await handle.stat();
+      if (!s.isFile()) throw new PDFImageCorruptError(index, 'unreadable file');
+      if (s.size > cap) throw tooBig(s.size);
+      // The file may grow after stat: read through this one handle and never
+      // more than the cap, so the allocation stays bounded.
+      const chunks: Buffer[] = [];
+      let total = 0;
+      for (;;) {
+        const chunk = Buffer.allocUnsafe(Math.min(1 << 20, cap + 1 - total));
+        const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
+        if (bytesRead === 0) break;
+        total += bytesRead;
+        if (total > cap) throw tooBig(total);
+        chunks.push(chunk.subarray(0, bytesRead));
+      }
+      return Buffer.concat(chunks, total);
+    } catch (e) {
+      if (e instanceof PDFImageInputError) throw e;
       throw new PDFImageCorruptError(index, 'unreadable file');
+    } finally {
+      await handle.close().catch(() => undefined);
     }
   }
   if (!(input instanceof Uint8Array)) {
     throw new PDFImageUnsupportedTypeError(index);
   }
-  if (input.byteLength > maxBytes) {
-    throw new PDFImageLimitExceededError(
-      'maxImageBytes',
-      input.byteLength,
-      maxBytes,
-      index,
-    );
-  }
+  if (input.byteLength > cap) throw tooBig(input.byteLength);
   return input;
 }
 
@@ -617,7 +648,13 @@ export async function imagesToPdf(
 
   let total = 0;
   for (let i = 0; i < images.length; i++) {
-    const bytes = await loadBytes(images[i], i, maxImageBytes);
+    const bytes = await loadBytes(
+      images[i],
+      i,
+      maxImageBytes,
+      maxTotalBytes - total,
+      maxTotalBytes,
+    );
     total += bytes.byteLength;
     if (total > maxTotalBytes) {
       throw new PDFImageLimitExceededError(
