@@ -753,6 +753,79 @@ export class PDFImageCollectionLimitError extends PDFError {
 }
 
 /**
+ * Base class for failures of `imagesToPdf`. Every subclass carries the
+ * zero-based `index` of the offending input (when one applies) and never
+ * includes image bytes, file contents, or file paths in its message.
+ */
+export class PDFImageInputError extends PDFError {
+  constructor(
+    message: string,
+    code: string,
+    public index?: number,
+  ) {
+    super(message, code);
+    this.name = 'PDFImageInputError';
+  }
+}
+
+/**
+ * Thrown when an input is not a PNG or JPEG image. The type is decided
+ * from the file signature, never from a name or declared MIME type.
+ */
+export class PDFImageUnsupportedTypeError extends PDFImageInputError {
+  constructor(index: number) {
+    super(
+      `Image ${index} is not a supported type (PNG or JPEG)`,
+      'EIMAGEUNSUPPORTED',
+      index,
+    );
+    this.name = 'PDFImageUnsupportedTypeError';
+  }
+}
+
+/**
+ * Thrown when an input has a supported signature but cannot be decoded:
+ * truncated, malformed, or unreadable.
+ */
+export class PDFImageCorruptError extends PDFImageInputError {
+  constructor(index: number, detail?: string) {
+    super(
+      `Image ${index} is corrupt or truncated${detail ? ` (${detail})` : ''}`,
+      'EIMAGECORRUPT',
+      index,
+    );
+    this.name = 'PDFImageCorruptError';
+  }
+}
+
+/** Which `imagesToPdf` limit was exceeded. */
+export type PDFImageLimitKind =
+  | 'maxImages'
+  | 'maxImageBytes'
+  | 'maxTotalBytes'
+  | 'maxImagePixels';
+
+/**
+ * Thrown when `imagesToPdf` input exceeds a configured limit. `limit` names
+ * the option, `actual` and `max` carry the numbers.
+ */
+export class PDFImageLimitExceededError extends PDFImageInputError {
+  constructor(
+    public limit: PDFImageLimitKind,
+    public actual: number,
+    public max: number,
+    index?: number,
+  ) {
+    super(
+      `${limit} exceeded${index === undefined ? '' : ` by image ${index}`} (${actual} > ${max})`,
+      'EIMAGELIMITEXCEEDED',
+      index,
+    );
+    this.name = 'PDFImageLimitExceededError';
+  }
+}
+
+/**
  * Thrown when OCR fallback is required but page rendering or recognition fails.
  *
  * The optional `pages` field identifies the page set involved in the fallback

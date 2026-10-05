@@ -1,4 +1,4 @@
-<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>checkOCRDependencies | @happyvertical/pdf API Reference - v0.65.9</title><meta name="description" content="Documentation for @happyvertical/pdf API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>ImagesToPdfInput | @happyvertical/pdf API Reference - v0.65.9</title><meta name="description" content="Documentation for @happyvertical/pdf API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
 <div class="tsd-toolbar-contents container"><a href="../index.html" class="title">@happyvertical/pdf API Reference - v0.65.9</a>
 <div id="tsd-toolbar-links"><a href="https://github.com/happyvertical/pdf">GitHub</a><a href="https://www.npmjs.com/package/@happyvertical/pdf">npm</a></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
 <ul role="listbox" id="tsd-search-results"></ul>
@@ -8,22 +8,13 @@
 <div class="col-content">
 <div class="tsd-page-title">
 <ul class="tsd-breadcrumb" aria-label="Breadcrumb">
-<li><a href="" aria-current="page">checkOCRDependencies</a></li></ul>
-<h1 class="deprecated">Function checkOCRDependencies</h1></div>
-<section class="tsd-panel">
-<ul class="tsd-signatures">
-<li class="">
-<div class="tsd-signature tsd-anchor-link" id="checkocrdependencies"><span class="tsd-kind-call-signature">checkOCRDependencies</span><span class="tsd-signature-symbol">()</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">DependencyCheckResult</span><span class="tsd-signature-symbol">&gt;</span><a href="#checkocrdependencies" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
-<div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Check if OCR dependencies are available (legacy compatibility)</p>
-</div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">DependencyCheckResult</span><span class="tsd-signature-symbol">&gt;</span></h4>
-<div class="tsd-comment tsd-typography">
-<div class="tsd-tag-deprecated">
-<h4 class="tsd-anchor-link" id="deprecated">Deprecated<a href="#deprecated" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h4><p>Use getPDFReader().checkDependencies() instead</p>
-</div></div><aside class="tsd-sources">
+<li><a href="" aria-current="page">ImagesToPdfInput</a></li></ul>
+<h1>Type Alias ImagesToPdfInput</h1></div>
+<div class="tsd-signature"><span class="tsd-kind-type-alias">ImagesToPdfInput</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Buffer</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">Uint8Array</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">string</span></div>
+<div class="tsd-comment tsd-typography"><p>One image: encoded bytes, or a filesystem path to read them from.</p>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/index.ts#L168">index.ts:168</a></li></ul></aside></div></li></ul></section></div>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/images-to-pdf.ts#L43">node/images-to-pdf.ts:43</a></li></ul></aside></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
