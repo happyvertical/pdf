@@ -365,3 +365,56 @@ surface locally. The generated API reference lives in `docs/api/`; run
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Remote PaddleOCR-VL document parsing
+
+Use the explicit `PaddleOCRClient` when you want the full layout-aware PaddleOCR
+pipeline, including tables and page structure, even for PDFs with embedded text.
+It calls `/layout-parsing`, not an OpenAI-compatible VLM endpoint. Existing
+`getPDFReader()` selection and image OCR providers are unchanged.
+
+```typescript
+import { PaddleOCRClient } from '@happyvertical/pdf';
+
+const parser = new PaddleOCRClient({
+  baseUrl: 'http://paddleocr-vl', // Snail tailnet endpoint
+  // In cluster: http://paddleocr-vl.paddleocr-vl.svc.cluster.local
+  timeout: 65 * 60 * 1000, // includes on-demand wake and response download
+});
+const result = await parser.parse('/path/to/document.pdf', {
+  signal: AbortSignal.timeout(65 * 60 * 1000),
+});
+console.log(result.markdown);
+for (const page of result.pages) {
+  console.log(page.pageNumber, page.markdown, page.layout);
+}
+```
+
+`baseUrl` defaults to `HAVE_PDF_PADDLEOCR_URL`; an optional `apiKey` defaults to
+`HAVE_PDF_PADDLEOCR_API_KEY` and becomes a bearer header for authenticated proxies.
+Explicit options take precedence. Snail uses private tailnet/namespace access,
+not built-in bearer authentication; configure that boundary in `iac` before
+exposing this endpoint elsewhere. In-cluster callers must be in a namespace
+labelled `happyvertical.com/paddleocr-client: "true"`.
+
+Inputs are local paths, `ArrayBuffer`, or `Uint8Array` (including `Buffer`).
+Strings are never fetched as remote URLs. Inputs are validated for a PDF header
+and limited to 50 MiB by default (`maxFileSize` overrides this). The service's
+70 MiB JSON body limit accommodates that PDF after base64 encoding. The client
+holds the PDF and encoded request in memory. It returns ordered, one-based pages,
+per-page raw layout objects, and joined Markdown. Unknown layout labels are kept.
+Set `returnMarkdownImages: true` to receive the image data/URLs referenced by
+Markdown; by default these are omitted to reduce response size. Treat returned
+Markdown, HTML tables, and image URLs as untrusted document content.
+
+The first request after idle waits for the model. Images may take longer to pull
+on the first deployment than the proxy's five-minute wake window; retry after
+startup completes. Requests are **not automatically retried**, because a timeout
+or disconnect does not guarantee server-side parsing stopped. `PaddleOCRError`
+uses `ETIMEDOUT`, `EABORT`, `EPADDLEHTTP` (with `status`), `EPADDLEAPI`,
+`EPADDLERESPONSE`, or `EPADDLEIO`; invalid input uses `PDFError` and size violations
+use `PDFFileSizeError`. Error messages do not echo document contents or credentials.
+A proxy `/health` success means the wake route exists, not that the GPU is warm.
+The initial service handles one document at a time; serialize submissions and
+split very long documents. Its idle expiry does not track an in-flight request,
+and client cancellation does not cancel GPU processing.

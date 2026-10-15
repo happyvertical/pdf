@@ -181,3 +181,13 @@ export default factory;
 
 /** @internal */
 export const PACKAGE_VERSION_INITIALIZED = true;
+
+// Explicit full-document service client; existing reader/OCR defaults are unchanged.
+export {
+  PaddleOCRClient,
+  type PaddleOCRClientOptions,
+  PaddleOCRError,
+  type PaddleOCRPage,
+  type PaddleOCRParseOptions,
+  type PaddleOCRResult,
+} from './node/paddleocr';
