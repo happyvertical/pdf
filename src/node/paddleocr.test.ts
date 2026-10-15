@@ -1,9 +1,14 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PaddleOCRClient } from './paddleocr';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...fs, stat: vi.fn(fs.stat), readFile: vi.fn(fs.readFile) };
+});
 
 const pdf = Buffer.from('%PDF-1.7\nfixture');
 const envelope = () => ({
@@ -241,6 +246,48 @@ describe('PaddleOCR full pipeline client', () => {
       }),
     ).rejects.toMatchObject({ code: 'EABORT' });
     expect(calls).toHaveLength(count);
+  });
+
+  it('enforces deadlines while metadata is stalled and handles late rejection', async () => {
+    let rejectStat!: (reason: Error) => void;
+    vi.mocked(stat).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectStat = reject;
+        }),
+    );
+    await expect(
+      new PaddleOCRClient({ baseUrl, timeout: 30 }).parse('/stalled.pdf'),
+    ).rejects.toMatchObject({ code: 'ETIMEDOUT' });
+    rejectStat(new Error('late filesystem failure'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toHaveLength(0);
+  });
+
+  it('honors caller cancellation during a stalled metadata lookup', async () => {
+    vi.mocked(stat).mockImplementationOnce(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const pending = new PaddleOCRClient({ baseUrl }).parse('/stalled.pdf', {
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(), 20);
+    await expect(pending).rejects.toMatchObject({ code: 'EABORT' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('enforces the deadline when file reading never settles', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'paddle-stalled-'));
+    try {
+      const path = join(dir, 'document.pdf');
+      await writeFile(path, pdf);
+      vi.mocked(readFile).mockImplementationOnce(() => new Promise(() => {}));
+      await expect(
+        new PaddleOCRClient({ baseUrl, timeout: 30 }).parse(path),
+      ).rejects.toMatchObject({ code: 'ETIMEDOUT' });
+      expect(calls).toHaveLength(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('validates configuration without echoing credentials', () => {

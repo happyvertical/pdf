@@ -115,6 +115,30 @@ function normalizeResponse(value: unknown): PaddleOCRResult {
   };
 }
 
+// Filesystem APIs can remain blocked in stat/open despite an AbortSignal.
+// Stop awaiting them at the deadline; consume any eventual rejection as well.
+function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', abort);
+    const abort = () => {
+      cleanup();
+      reject(signal.reason);
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    operation.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+    if (signal.aborted) abort();
+  });
+}
+
 /**
  * Explicit Node.js client for the full PaddleOCR-VL HTTP pipeline.
  *
@@ -192,9 +216,9 @@ export class PaddleOCRClient {
       signal.throwIfAborted();
       let data: Uint8Array;
       if (typeof source === 'string') {
-        const info = await stat(source);
+        const info = await abortable(stat(source), signal);
         this.assertSize(info.size);
-        data = await readFile(source, { signal });
+        data = await abortable(readFile(source, { signal }), signal);
       } else if (source instanceof Uint8Array) {
         data = source;
       } else if (source instanceof ArrayBuffer) {
