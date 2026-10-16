@@ -7,6 +7,7 @@
  * see one complete reader. Selected only by name, never by `auto`.
  */
 
+import { stat } from 'node:fs/promises';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { BasePDFReader } from '../shared/base';
 import { canonicalizeImageFormat } from '../shared/image-format';
@@ -23,7 +24,7 @@ import type {
   PDFSource,
   RenderPagesOptions,
 } from '../shared/types';
-import { PDFError } from '../shared/types';
+import { PDFError, PDFFileSizeError } from '../shared/types';
 import { encodePDFImage } from './image-encoding';
 import {
   PaddleOCRClient,
@@ -35,8 +36,8 @@ import { UnpdfProvider } from './unpdf';
 /** Options for `getPDFReader({ provider: 'paddleocr', paddleocr })`. */
 export interface PaddleOCRReaderOptions extends PaddleOCRClientOptions {
   /**
-   * Read a document whose text layer covers it (`getInfo` strategy `text`)
-   * locally, and send only scanned or mixed documents to the service.
+   * Read locally only after every page has text and no raster image content.
+   * Scanned or mixed documents still go to the service.
    * Default: `HAVE_PDF_PADDLEOCR_PREFER_EMBEDDED_TEXT=true`, else false — the
    * service reads every document.
    */
@@ -108,11 +109,16 @@ export class PaddleOCRProvider extends BasePDFReader {
     source: PDFSource,
     options?: ExtractTextOptions,
   ): Promise<string | null> {
+    await this.assertSourceSize(source);
     if (options?.skipOCRFallback || !this.enableOCR) {
       return this.local.extractText(source, options);
     }
     const info = await this.local.getInfo(source);
-    if (this.preferEmbeddedText && info.recommendedStrategy === 'text') {
+    if (
+      this.preferEmbeddedText &&
+      info.recommendedStrategy === 'text' &&
+      (await this.local.hasCompleteTextLayer(source))
+    ) {
       return this.local.extractText(source, options);
     }
 
@@ -175,10 +181,12 @@ export class PaddleOCRProvider extends BasePDFReader {
   }
 
   async getInfo(source: PDFSource): Promise<PDFInfo> {
+    await this.assertSourceSize(source);
     return this.local.getInfo(source);
   }
 
   async extractMetadata(source: PDFSource): Promise<PDFMetadata> {
+    await this.assertSourceSize(source);
     return this.local.extractMetadata(source);
   }
 
@@ -186,6 +194,7 @@ export class PaddleOCRProvider extends BasePDFReader {
     source: PDFSource,
     options?: ExtractImagesOptions,
   ): Promise<PDFImage[]> {
+    await this.assertSourceSize(source);
     return this.local.extractImages(source, options);
   }
 
@@ -193,7 +202,25 @@ export class PaddleOCRProvider extends BasePDFReader {
     source: PDFSource,
     options?: RenderPagesOptions,
   ): Promise<PDFImage[]> {
+    await this.assertSourceSize(source);
     return this.local.renderPages(source, options);
+  }
+
+  private async assertSourceSize(source: PDFSource): Promise<void> {
+    try {
+      const size =
+        typeof source === 'string'
+          ? (await stat(source)).size
+          : source.byteLength;
+      if (size > this.maxFileSize)
+        throw new PDFFileSizeError(size, this.maxFileSize);
+    } catch (error) {
+      if (error instanceof PDFError) throw error;
+      throw new PaddleOCRError(
+        'PaddleOCR input could not be inspected',
+        'EPADDLEIO',
+      );
+    }
   }
 
   async checkCapabilities(): Promise<PDFCapabilities> {

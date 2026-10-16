@@ -404,14 +404,16 @@ const markdown = await reader.extractText('/path/to/scan.pdf');
   this provider. A missing or invalid service URL fails at `getPDFReader()`.
 - **Embedded text.** By default the service reads every document, including
   ones with a text layer. With `preferEmbeddedText: true`, a document whose
-  `getInfo` strategy is `text` is read locally instead; scanned and mixed ones
-  still go to the service. `extractText(..., { skipOCRFallback: true })` always
+  every page has embedded text and no raster images is read locally instead.
+  Scanned, mixed, image-bearing, and uncertain documents still go to the service;
+  the decision checks all pages rather than relying on `getInfo`’s sample. `extractText(..., { skipOCRFallback: true })` always
   returns only the local text layer.
 - **No fallback.** A service failure throws `PaddleOCRError`. The reader never
   retries and never substitutes a local OCR engine. Any `ocrProvider` other
   than `auto` (including `tesseract`) is refused.
 - **Limits.** `paddleocr.maxFileSize` defaults to the reader's `maxFileSize`,
-  then 50 MiB. `paddleocr.timeout` defaults to 65 minutes and does not inherit
+  then 50 MiB. The size limit is checked before local PDF inspection, extraction,
+  rendering, or remote submission, including local-only text modes. `paddleocr.timeout` defaults to 65 minutes and does not inherit
   the reader's `timeout`, which is sized for local parsing; a shorter value
   also bounds the service's cold start.
 - **Pages.** If the service returns a different number of pages than the

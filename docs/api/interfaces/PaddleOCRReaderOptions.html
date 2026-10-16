@@ -21,7 +21,7 @@
 <ul class="tsd-hierarchy">
 <li class="tsd-hierarchy-item"><span class="tsd-hierarchy-target">PaddleOCRReaderOptions</span></li></ul></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr-provider.ts#L36">node/paddleocr-provider.ts:36</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr-provider.ts#L37">node/paddleocr-provider.ts:37</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -63,7 +63,7 @@ as with <code>skipOCRFallback</code>, and nothing is sent to the service. Mirror
 reader's <code>enableOCR</code>. Default: true.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr-provider.ts#L49">node/paddleocr-provider.ts:49</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr-provider.ts#L50">node/paddleocr-provider.ts:50</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-inherited">
 <h3 class="tsd-anchor-link" id="maxfilesize"><code class="tsd-tag">Optional</code><span>max<wbr/>File<wbr/>Size</span><a href="#maxfilesize" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">maxFileSize</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
@@ -75,13 +75,13 @@ reader's <code>enableOCR</code>. Default: true.</p>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="preferembeddedtext"><code class="tsd-tag">Optional</code><span>prefer<wbr/>Embedded<wbr/>Text</span><a href="#preferembeddedtext" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">preferEmbeddedText</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
-<div class="tsd-comment tsd-typography"><p>Read a document whose text layer covers it (<code>getInfo</code> strategy <code>text</code>)
-locally, and send only scanned or mixed documents to the service.
+<div class="tsd-comment tsd-typography"><p>Read locally only after every page has text and no raster image content.
+Scanned or mixed documents still go to the service.
 Default: <code>HAVE_PDF_PADDLEOCR_PREFER_EMBEDDED_TEXT=true</code>, else false — the
 service reads every document.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr-provider.ts#L43">node/paddleocr-provider.ts:43</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr-provider.ts#L44">node/paddleocr-provider.ts:44</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-inherited">
 <h3 class="tsd-anchor-link" id="timeout"><code class="tsd-tag">Optional</code><span>timeout</span><a href="#timeout" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">timeout</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>

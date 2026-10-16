@@ -2,11 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderMarkdownToPdf } from '../generation/markdown-pdf';
 import { getPDFReader, getProviderInfo } from '../shared/factory';
 import { imagesToPdf } from './images-to-pdf';
 import { PaddleOCRError } from './paddleocr';
+import { UnpdfProvider } from './unpdf';
 
 // A scanned document (no text layer), three pages.
 const scannedPdfPath = join(
@@ -339,6 +341,79 @@ describe("getPDFReader({ provider: 'paddleocr' })", () => {
       await reader.performOCR([{ data: png(), format: 'image/png' }]),
     ).toMatchObject({ text: '', confidence: 0 });
   });
+
+  it('enforces the size limit before every local PDF operation and local-only mode', async () => {
+    const bytes = await readFile(scannedPdfPath);
+    const probe = vi.spyOn(UnpdfProvider.prototype, 'getInfo');
+    try {
+      for (const source of [
+        scannedPdfPath,
+        bytes,
+        Uint8Array.from(bytes).buffer,
+      ]) {
+        const reader = await getPDFReader({
+          provider: 'paddleocr',
+          maxFileSize: 8,
+          paddleocr: { baseUrl },
+        });
+        for (const operation of [
+          () => reader.extractText(source),
+          () => reader.extractText(source, { skipOCRFallback: true }),
+          () => reader.getInfo(source),
+          () => reader.extractMetadata(source),
+          () => reader.extractImages(source),
+          () => reader.renderPages(source),
+        ])
+          await expect(operation()).rejects.toMatchObject({ code: 'EMAXFILE' });
+        for (const options of [
+          { enableOCR: false },
+          { paddleocr: { baseUrl, preferEmbeddedText: true } },
+        ]) {
+          const local = await getPDFReader({
+            provider: 'paddleocr',
+            maxFileSize: 8,
+            paddleocr: { baseUrl },
+            ...options,
+          });
+          await expect(local.extractText(source)).rejects.toMatchObject({
+            code: 'EMAXFILE',
+          });
+        }
+      }
+      expect(probe).not.toHaveBeenCalled();
+      expect(calls).toHaveLength(0);
+    } finally {
+      probe.mockRestore();
+    }
+  });
+
+  it.each([false, true])(
+    'keeps late scanned pages on the service path (text footer: %s)',
+    async (footer) => {
+      const doc = await PDFDocument.create();
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      for (let i = 0; i < 3; i++) {
+        const page = doc.addPage();
+        page.drawText('text layer '.repeat(60), { font, size: 10 });
+      }
+      const scan = await doc.embedPng(png());
+      const last = doc.addPage();
+      last.drawImage(scan, { width: 300, height: 200 });
+      if (footer) last.drawText('Footer', { font, size: 10 });
+      const data = await doc.save();
+      const reader = await getPDFReader({
+        provider: 'paddleocr',
+        paddleocr: { baseUrl, preferEmbeddedText: true },
+      });
+      expect((await reader.getInfo(data)).recommendedStrategy).toBe('text');
+      respond = (res) =>
+        json(res, envelope(['first', 'second', 'third', 'scanned fourth']));
+      expect(await reader.extractText(data, { pages: [4] })).toBe(
+        'scanned fourth',
+      );
+      expect(calls).toHaveLength(1);
+    },
+  );
 
   it('refuses a corrupt WebP as invalid input before any request', async () => {
     const reader = await getPDFReader({
