@@ -12,13 +12,14 @@
 <h1>Class PaddleOCRClient</h1></div>
 <section class="tsd-panel tsd-comment">
 <div class="tsd-comment tsd-typography"><p>Explicit Node.js client for the full PaddleOCR-VL HTTP pipeline.</p>
-<p>Sends PDF bytes to /layout-parsing. Strings are local paths, never remote URLs.
-It does not change getPDFReader defaults or implement an image OCR provider.
+<p>Sends PDF bytes (or one PNG/JPEG image) to /layout-parsing. Strings are local
+paths, never remote URLs. <code>getPDFReader({ provider: 'paddleocr' })</code> wraps it
+as a full reader; <code>auto</code> never selects it.
 Requests are not retried automatically: a failed connection can leave a GPU
 parse running. A /health response from an on-demand proxy is not model readiness.</p>
 </div></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr.ts#L150">node/paddleocr.ts:150</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr.ts#L159">node/paddleocr.ts:159</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -31,6 +32,7 @@ parse running. A /health response from an on-demand proxy is not model readiness
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading tsd-anchor-link" id="methods">Methods<a href="#methods" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-index-list"><a href="#parse" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>parse</span></a>
+<a href="#parseimage" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>parse<wbr/>Image</span></a>
 </div></section></div></details></section></section>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Constructors"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="constructors-1">Constructors<a href="#constructors-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
@@ -47,7 +49,7 @@ parse running. A /health response from an on-demand proxy is not model readiness
 <li><span><span class="tsd-kind-parameter">options</span>: <a href="../interfaces/PaddleOCRClientOptions.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRClientOptions</a><span class="tsd-signature-symbol"> = {}</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">PaddleOCRClient</a></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr.ts#L156">node/paddleocr.ts:156</a></li></ul></aside></div></li></ul></section></section></details>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr.ts#L165">node/paddleocr.ts:165</a></li></ul></aside></div></li></ul></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="methods-1">Methods<a href="#methods-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
@@ -66,7 +68,24 @@ parse running. A /health response from an on-demand proxy is not model readiness
 <li><span><span class="tsd-kind-parameter">options</span>: <a href="../interfaces/PaddleOCRParseOptions.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRParseOptions</a><span class="tsd-signature-symbol"> = {}</span></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/PaddleOCRResult.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRResult</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr.ts#L205">node/paddleocr.ts:205</a></li></ul></aside></div></li></ul></section></section></details></div>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr.ts#L214">node/paddleocr.ts:214</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="parseimage"><span>parse<wbr/>Image</span><a href="#parseimage" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="parseimage-1"><span class="tsd-kind-call-signature">parseImage</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">image</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Uint8Array</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">options</span><span class="tsd-signature-symbol">?:</span> <a href="../interfaces/PaddleOCRParseOptions.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRParseOptions</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/PaddleOCRResult.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRResult</a><span class="tsd-signature-symbol">&gt;</span><a href="#parseimage-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Parse one encoded PNG or JPEG image as a single-page document. The result
+has exactly one page. Other formats are refused before any request.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">image</span>: <span class="tsd-signature-type">Uint8Array</span></span></li>
+<li><span><span class="tsd-kind-parameter">options</span>: <a href="../interfaces/PaddleOCRParseOptions.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRParseOptions</a><span class="tsd-signature-symbol"> = {}</span></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/PaddleOCRResult.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRResult</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/node/paddleocr.ts#L249">node/paddleocr.ts:249</a></li></ul></aside></div></li></ul></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -83,7 +102,7 @@ parse running. A /health response from an on-demand proxy is not model readiness
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Constructors"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Constructors</summary>
 <div><a href="#constructor"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Constructor"><use href="../assets/icons.svg#icon-512"></use></svg><span>constructor</span></a></div></details>
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Methods</summary>
-<div><a href="#parse"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>parse</span></a></div></details></div></details></div>
+<div><a href="#parse"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>parse</span></a><a href="#parseimage"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>parse<wbr/>Image</span></a></div></details></div></details></div>
 <div class="site-menu">
 <nav id="tsd-sidebar-links" class="tsd-navigation"><a href="https://github.com/happyvertical/pdf" class="tsd-nav-link">GitHub</a><a href="https://www.npmjs.com/package/@happyvertical/pdf" class="tsd-nav-link">npm</a></nav>
 <nav class="tsd-navigation"><a href="../index.html">@happyvertical/pdf API Reference - v0.66.0</a>

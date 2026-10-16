@@ -883,6 +883,39 @@ export class UnpdfProvider extends BasePDFReader {
   /**
    * Get quick information about a PDF document
    */
+  /**
+   * Conservatively verify every page before a caller skips remote OCR.
+   * Unlike getInfo's fast sample, this never classifies later scanned pages
+   * from the first three pages. Image-bearing pages stay on the OCR path even
+   * when they also have text (for example a scanned page with a text footer).
+   */
+  async hasCompleteTextLayer(source: PDFSource): Promise<boolean> {
+    const unpdf = await this.loadUnpdf();
+    const pdf = await this.loadPDFDocument(unpdf, source);
+    try {
+      const { OPS } = await unpdf.getResolvedPDFJS();
+      const imageOps = new Set(
+        Object.entries(OPS)
+          .filter(([name]) => /paint.*Image/.test(name))
+          .map(([, value]) => value),
+      );
+      if (pdf.numPages === 0) return false;
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        if (!content.items.some((item) => readTextItem(item).trim()))
+          return false;
+        const operators = await page.getOperatorList();
+        if (operators.fnArray.some((op) => imageOps.has(op))) return false;
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await this.closePDFDocument(pdf);
+    }
+  }
+
   async getInfo(source: PDFSource): Promise<PDFInfo> {
     try {
       const unpdf = await this.loadUnpdf();

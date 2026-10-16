@@ -182,7 +182,8 @@ export default factory;
 /** @internal */
 export const PACKAGE_VERSION_INITIALIZED = true;
 
-// Explicit full-document service client; existing reader/OCR defaults are unchanged.
+// PaddleOCR-VL: the full-result client, and the reader behind
+// getPDFReader({ provider: 'paddleocr' }) (never selected by 'auto').
 export {
   PaddleOCRClient,
   type PaddleOCRClientOptions,
@@ -191,3 +192,5 @@ export {
   type PaddleOCRParseOptions,
   type PaddleOCRResult,
 } from './node/paddleocr';
+// Type only: the provider loads lazily through getPDFReader().
+export type { PaddleOCRReaderOptions } from './node/paddleocr-provider';

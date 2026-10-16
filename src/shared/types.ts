@@ -307,8 +307,11 @@ export interface PDFCapabilities {
  * ```
  */
 export interface PDFReaderOptions {
-  /** Preferred provider type */
-  provider?: 'unpdf' | 'pdfjs' | 'kreuzberg' | 'auto';
+  /**
+   * Preferred provider type. `paddleocr` reads through a remote PaddleOCR-VL
+   * service and is only ever used when named; `auto` never selects it.
+   */
+  provider?: 'unpdf' | 'pdfjs' | 'kreuzberg' | 'paddleocr' | 'auto';
   /** Whether to enable OCR fallback for image-based PDFs */
   enableOCR?: boolean;
   /** OCR provider to use ('auto', 'tesseract', 'onnx') */
@@ -319,6 +322,11 @@ export interface PDFReaderOptions {
   maxFileSize?: number;
   /** Timeout for processing operations (in milliseconds) */
   timeout?: number;
+  /**
+   * PaddleOCR-VL service settings for `provider: 'paddleocr'`. `baseUrl` and
+   * `apiKey` fall back to `HAVE_PDF_PADDLEOCR_URL` / `HAVE_PDF_PADDLEOCR_API_KEY`.
+   */
+  paddleocr?: import('../node/paddleocr-provider').PaddleOCRReaderOptions;
 }
 
 // Re-export DependencyCheckResult for backward compatibility within PDF package

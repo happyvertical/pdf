@@ -22,7 +22,7 @@ current environment (the combined Node reader in Node.js, PDF.js in browsers).</
 </code><button type="button">Copy</button></pre>
 
 </div></div></section>
-<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">PDFReaderOptions</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#defaultocroptions">defaultOCROptions</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">OCROptions</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#enableocr">enableOCR</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#maxfilesize">maxFileSize</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#ocrprovider">ocrProvider</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#provider">provider</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;unpdf&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;pdfjs&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;kreuzberg&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;auto&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#timeout">timeout</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">PDFReaderOptions</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#defaultocroptions">defaultOCROptions</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">OCROptions</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#enableocr">enableOCR</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#maxfilesize">maxFileSize</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#ocrprovider">ocrProvider</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#paddleocr">paddleocr</a><span class="tsd-signature-symbol">?:</span> <a href="PaddleOCRReaderOptions.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRReaderOptions</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#provider">provider</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;unpdf&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;paddleocr&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;pdfjs&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;kreuzberg&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;auto&quot;</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#timeout">timeout</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
 <li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L309">shared/types.ts:309</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
@@ -36,6 +36,7 @@ current environment (the combined Node reader in Node.js, PDF.js in browsers).</
 <a href="#enableocr" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>enable<wbr/>OCR?</span></a>
 <a href="#maxfilesize" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>max<wbr/>File<wbr/>Size?</span></a>
 <a href="#ocrprovider" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>ocr<wbr/>Provider?</span></a>
+<a href="#paddleocr" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>paddleocr?</span></a>
 <a href="#provider" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>provider?</span></a>
 <a href="#timeout" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>timeout?</span></a>
 </div></section></div></details></section></section>
@@ -48,42 +49,51 @@ current environment (the combined Node reader in Node.js, PDF.js in browsers).</
 <div class="tsd-comment tsd-typography"><p>Default OCR options</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L317">shared/types.ts:317</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L320">shared/types.ts:320</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="enableocr"><code class="tsd-tag">Optional</code><span>enable<wbr/>OCR</span><a href="#enableocr" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">enableOCR</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
 <div class="tsd-comment tsd-typography"><p>Whether to enable OCR fallback for image-based PDFs</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L313">shared/types.ts:313</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L316">shared/types.ts:316</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="maxfilesize"><code class="tsd-tag">Optional</code><span>max<wbr/>File<wbr/>Size</span><a href="#maxfilesize" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">maxFileSize</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>Maximum file size to process (in bytes)</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L319">shared/types.ts:319</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L322">shared/types.ts:322</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="ocrprovider"><code class="tsd-tag">Optional</code><span>ocr<wbr/>Provider</span><a href="#ocrprovider" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">ocrProvider</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">string</span></div>
 <div class="tsd-comment tsd-typography"><p>OCR provider to use ('auto', 'tesseract', 'onnx')</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L315">shared/types.ts:315</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L318">shared/types.ts:318</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
-<h3 class="tsd-anchor-link" id="provider"><code class="tsd-tag">Optional</code><span>provider</span><a href="#provider" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">provider</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;unpdf&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;pdfjs&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;kreuzberg&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;auto&quot;</span></div>
-<div class="tsd-comment tsd-typography"><p>Preferred provider type</p>
+<h3 class="tsd-anchor-link" id="paddleocr"><code class="tsd-tag">Optional</code><span>paddleocr</span><a href="#paddleocr" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">paddleocr</span><span class="tsd-signature-symbol">?:</span> <a href="PaddleOCRReaderOptions.html" class="tsd-signature-type tsd-kind-interface">PaddleOCRReaderOptions</a></div>
+<div class="tsd-comment tsd-typography"><p>PaddleOCR-VL service settings for <code>provider: 'paddleocr'</code>. <code>baseUrl</code> and
+<code>apiKey</code> fall back to <code>HAVE_PDF_PADDLEOCR_URL</code> / <code>HAVE_PDF_PADDLEOCR_API_KEY</code>.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L311">shared/types.ts:311</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L329">shared/types.ts:329</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="provider"><code class="tsd-tag">Optional</code><span>provider</span><a href="#provider" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">provider</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">&quot;unpdf&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;paddleocr&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;pdfjs&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;kreuzberg&quot;</span> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">&quot;auto&quot;</span></div>
+<div class="tsd-comment tsd-typography"><p>Preferred provider type. <code>paddleocr</code> reads through a remote PaddleOCR-VL
+service and is only ever used when named; <code>auto</code> never selects it.</p>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L314">shared/types.ts:314</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="timeout"><code class="tsd-tag">Optional</code><span>timeout</span><a href="#timeout" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">timeout</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>Timeout for processing operations (in milliseconds)</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L321">shared/types.ts:321</a></li></ul></aside></section></section></details></div>
+<li>Defined in <a href="https://github.com/happyvertical/pdf/blob/main/src/shared/types.ts#L324">shared/types.ts:324</a></li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -98,7 +108,7 @@ current environment (the combined Node reader in Node.js, PDF.js in browsers).</
 <h3>On This Page</h3></summary>
 <div class="tsd-accordion-details">
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Properties</summary>
-<div><a href="#defaultocroptions"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>default<wbr/>OCR<wbr/>Options</span></a><a href="#enableocr"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>enable<wbr/>OCR</span></a><a href="#maxfilesize"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>max<wbr/>File<wbr/>Size</span></a><a href="#ocrprovider"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>ocr<wbr/>Provider</span></a><a href="#provider"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>provider</span></a><a href="#timeout"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>timeout</span></a></div></details></div></details></div>
+<div><a href="#defaultocroptions"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>default<wbr/>OCR<wbr/>Options</span></a><a href="#enableocr"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>enable<wbr/>OCR</span></a><a href="#maxfilesize"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>max<wbr/>File<wbr/>Size</span></a><a href="#ocrprovider"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>ocr<wbr/>Provider</span></a><a href="#paddleocr"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>paddleocr</span></a><a href="#provider"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>provider</span></a><a href="#timeout"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>timeout</span></a></div></details></div></details></div>
 <div class="site-menu">
 <nav id="tsd-sidebar-links" class="tsd-navigation"><a href="https://github.com/happyvertical/pdf" class="tsd-nav-link">GitHub</a><a href="https://www.npmjs.com/package/@happyvertical/pdf" class="tsd-nav-link">npm</a></nav>
 <nav class="tsd-navigation"><a href="../index.html">@happyvertical/pdf API Reference - v0.66.0</a>

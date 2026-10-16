@@ -115,6 +115,14 @@ function normalizeResponse(value: unknown): PaddleOCRResult {
   };
 }
 
+function isPngOrJpeg(data: Uint8Array): boolean {
+  const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (data.length >= 8 && png.every((byte, i) => data[i] === byte)) return true;
+  return (
+    data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff
+  );
+}
+
 // Filesystem APIs can remain blocked in stat/open despite an AbortSignal.
 // Stop awaiting them at the deadline; consume any eventual rejection as well.
 function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -142,8 +150,9 @@ function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
 /**
  * Explicit Node.js client for the full PaddleOCR-VL HTTP pipeline.
  *
- * Sends PDF bytes to /layout-parsing. Strings are local paths, never remote URLs.
- * It does not change getPDFReader defaults or implement an image OCR provider.
+ * Sends PDF bytes (or one PNG/JPEG image) to /layout-parsing. Strings are local
+ * paths, never remote URLs. `getPDFReader({ provider: 'paddleocr' })` wraps it
+ * as a full reader; `auto` never selects it.
  * Requests are not retried automatically: a failed connection can leave a GPU
  * parse running. A /health response from an on-demand proxy is not model readiness.
  */
@@ -206,14 +215,7 @@ export class PaddleOCRClient {
     source: PDFSource,
     options: PaddleOCRParseOptions = {},
   ): Promise<PaddleOCRResult> {
-    const controller = new AbortController();
-    const signal = options.signal
-      ? AbortSignal.any([options.signal, controller.signal])
-      : controller.signal;
-    const timer = setTimeout(() => controller.abort(), this.timeout);
-    timer.unref();
-    try {
-      signal.throwIfAborted();
+    return this.submit(options, async (signal) => {
       let data: Uint8Array;
       if (typeof source === 'string') {
         const info = await abortable(stat(source), signal);
@@ -236,6 +238,45 @@ export class PaddleOCRClient {
       ) {
         throw new PDFError('Invalid PDF header', 'EINVAL');
       }
+      return { data, fileType: 0 };
+    });
+  }
+
+  /**
+   * Parse one encoded PNG or JPEG image as a single-page document. The result
+   * has exactly one page. Other formats are refused before any request.
+   */
+  async parseImage(
+    image: Uint8Array,
+    options: PaddleOCRParseOptions = {},
+  ): Promise<PaddleOCRResult> {
+    return this.submit(options, async () => {
+      if (!(image instanceof Uint8Array)) {
+        throw new PDFError('Expected image bytes as a Uint8Array', 'EINVAL');
+      }
+      this.assertSize(image.byteLength);
+      if (!isPngOrJpeg(image)) {
+        throw new PDFError('Expected a PNG or JPEG image', 'EINVAL');
+      }
+      return { data: image, fileType: 1 };
+    });
+  }
+
+  private async submit(
+    options: PaddleOCRParseOptions,
+    load: (
+      signal: AbortSignal,
+    ) => Promise<{ data: Uint8Array; fileType: 0 | 1 }>,
+  ): Promise<PaddleOCRResult> {
+    const controller = new AbortController();
+    const signal = options.signal
+      ? AbortSignal.any([options.signal, controller.signal])
+      : controller.signal;
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    timer.unref();
+    try {
+      signal.throwIfAborted();
+      const { data, fileType } = await load(signal);
       signal.throwIfAborted();
       const response = await fetch(this.endpoint, {
         method: 'POST',
@@ -251,7 +292,7 @@ export class PaddleOCRClient {
             data.byteOffset,
             data.byteLength,
           ).toString('base64'),
-          fileType: 0,
+          fileType,
           useLayoutDetection: true,
           visualize: false,
           returnMarkdownImages: options.returnMarkdownImages ?? false,
@@ -273,7 +314,9 @@ export class PaddleOCRClient {
         invalidResponse();
       }
       signal.throwIfAborted();
-      return normalizeResponse(value);
+      const result = normalizeResponse(value);
+      if (fileType === 1 && result.pages.length !== 1) invalidResponse();
+      return result;
     } catch (error) {
       if (options.signal?.aborted) {
         throw new PaddleOCRError('PaddleOCR request cancelled', 'EABORT');
