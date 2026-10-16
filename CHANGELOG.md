@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.67.1
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - use explicit local tarball path for npmjs mirror (#150) (release)
+
 ## 0.67.0
 
 ### Minor Changes
