@@ -1,6 +1,6 @@
 {
   "name": "@happyvertical/pdf",
-  "version": "0.66.0",
+  "version": "0.67.0",
   "description": "Node.js PDF extraction, OCR fallback, image extraction, and PDF generation utilities",
   "type": "module",
   "main": "./dist/index.js",
