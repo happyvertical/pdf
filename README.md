@@ -366,7 +366,9 @@ The package ships generated JavaScript and declaration files from `dist/`.
 Run `pnpm build` to refresh the declarations before inspecting the full API
 surface locally. The generated API reference lives in `docs/api/`; run
 `pnpm docs:api` after changing public exports or JSDoc, and run
-`pnpm docs:api:check` to verify the committed reference is current.
+`pnpm docs:api:check` to verify the committed reference is current. Generate and verify
+these docs with Node 24, matching CI: TypeDoc compresses its search and navigation
+indexes with the runtime’s zlib, so Node 26 emits different bytes for the same JSON.
 
 ## License
 
