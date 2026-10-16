@@ -314,7 +314,9 @@ export class PaddleOCRClient {
         invalidResponse();
       }
       signal.throwIfAborted();
-      return normalizeResponse(value);
+      const result = normalizeResponse(value);
+      if (fileType === 1 && result.pages.length !== 1) invalidResponse();
+      return result;
     } catch (error) {
       if (options.signal?.aborted) {
         throw new PaddleOCRError('PaddleOCR request cancelled', 'EABORT');

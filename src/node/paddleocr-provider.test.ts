@@ -323,6 +323,23 @@ describe("getPDFReader({ provider: 'paddleocr' })", () => {
     expect(await reader.extractText(damaged)).toBe('recovered');
   });
 
+  it('rejects missing or extra response pages for an image', async () => {
+    const reader = await getPDFReader({
+      provider: 'paddleocr',
+      paddleocr: { baseUrl },
+    });
+    for (const pages of [[], ['a', 'b']]) {
+      respond = (res) => json(res, envelope(pages));
+      await expect(
+        reader.performOCR([{ data: png(), format: 'image/png' }]),
+      ).rejects.toMatchObject({ code: 'EPADDLERESPONSE' });
+    }
+    respond = (res) => json(res, envelope(['']));
+    expect(
+      await reader.performOCR([{ data: png(), format: 'image/png' }]),
+    ).toMatchObject({ text: '', confidence: 0 });
+  });
+
   it('refuses a corrupt WebP as invalid input before any request', async () => {
     const reader = await getPDFReader({
       provider: 'paddleocr',
