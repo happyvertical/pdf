@@ -307,7 +307,7 @@ jobs:
           fi
           mkdir -p mirror-pack
           (cd mirror-pack && npm pack "$name@$VERSION" "${primary_args[@]}" > /dev/null)
-          tarball=$(find mirror-pack -name '*.tgz')
+          tarball=$(find ./mirror-pack -name '*.tgz')
           [ "$(printf '%s\n' "$tarball" | wc -l)" -eq 1 ] || fail "expected exactly one downloaded tarball"
           actual="sha512-$(openssl dgst -sha512 -binary "$tarball" | base64 -w0)"
           [ "$actual" = "$primary_integrity" ] || fail "downloaded tarball does not match the primary's integrity"
