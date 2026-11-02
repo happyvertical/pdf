@@ -34,7 +34,7 @@ jobs:
     # is skipped here and would be refused by the Environment anyway.
     if: github.ref == 'refs/heads/main'
     environment: release
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
       published: ${{ steps.version-check.outputs.changed || 'false' }}
@@ -269,7 +269,7 @@ jobs:
     needs: release
     if: github.ref == 'refs/heads/main' && needs.release.outputs.published == 'true'
     environment: release
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
     permissions:

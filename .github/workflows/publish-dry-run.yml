@@ -32,7 +32,7 @@ permissions:
 jobs:
   pack:
     name: Pack and Resolve
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'arc-happyvertical' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
