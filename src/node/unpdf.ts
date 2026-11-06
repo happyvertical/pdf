@@ -82,6 +82,11 @@ function readTextItem(item: TextItem | TextMarkedContent): string {
   return 'str' in item ? item.str : '';
 }
 
+function readFormattedTextItem(item: TextItem | TextMarkedContent): string {
+  if (!('str' in item)) return '';
+  return item.hasEOL ? `${item.str}\n` : item.str;
+}
+
 function createNodeRenderParameters(
   page: PDFPageProxy,
   canvas: unknown,
@@ -329,11 +334,10 @@ export class UnpdfProvider extends BasePDFReader {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
 
-            // Combine text items into a single string
-            const pageText = textContent.items
-              .map(readTextItem)
-              .join(' ')
-              .trim();
+            // PDF.js already supplies spaces between text runs on a line.
+            const pageText = options?.preserveFormatting
+              ? textContent.items.map(readFormattedTextItem).join('').trim()
+              : textContent.items.map(readTextItem).join(' ').trim();
 
             pageTexts.push(pageText);
           } catch (pageError) {
