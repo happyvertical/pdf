@@ -1,5 +1,13 @@
 # @happyvertical/pdf
 
+## 0.67.2
+
+### Patch Changes
+
+- ### Bug Fixes
+
+  - preserve native line breaks when requested (#154) (pdf)
+
 ## 0.67.1
 
 ### Patch Changes
