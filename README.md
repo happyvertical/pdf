@@ -59,6 +59,10 @@ console.log(text);
 text extraction finds nothing useful, the Node reader renders pages and sends
 them through `@happyvertical/ocr`.
 
+With the Node `unpdf` provider, pass `{ preserveFormatting: true }` to retain
+the line breaks detected in embedded text. Use `pages` to select individual
+pages, or leave `mergePages` unset to separate pages with a blank line.
+
 ## Analyze Before Processing
 
 Use `getInfo()` when routing many documents or deciding whether OCR is likely

@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PDFDocument } from 'pdf-lib';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getPDFReader } from './index';
 import type { PDFReader } from './shared/types';
@@ -20,6 +21,38 @@ describe('PDF Content Extraction', () => {
       'test',
       'Signed-Meeting-Minutes-October-8-2024-Regular-Council-Meeting-1.pdf',
     );
+  });
+
+  it('preserves native line breaks only when requested', async () => {
+    const document = await PDFDocument.create();
+    document.addPage().drawText('Platform engineer\nNorthwind Labs', {
+      lineHeight: 18,
+      x: 48,
+      y: 700,
+    });
+    document.addPage().drawText('Education\nExample University', {
+      lineHeight: 18,
+      x: 48,
+      y: 700,
+    });
+    const bytes = await document.save();
+    const options = { skipOCRFallback: true };
+
+    await expect(unpdfReader.extractText(bytes, options)).resolves.toMatch(
+      /^Platform engineer +Northwind Labs\n\nEducation +Example University$/u,
+    );
+    await expect(
+      unpdfReader.extractText(bytes, { ...options, preserveFormatting: true }),
+    ).resolves.toBe(
+      'Platform engineer\nNorthwind Labs\n\nEducation\nExample University',
+    );
+    await expect(
+      unpdfReader.extractText(bytes, {
+        ...options,
+        pages: [2],
+        preserveFormatting: true,
+      }),
+    ).resolves.toBe('Education\nExample University');
   });
 
   it('should extract metadata from PDF', async () => {
