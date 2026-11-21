@@ -68,7 +68,7 @@
     "@napi-rs/canvas": "0.1.100",
     "marked": "^18.0.6",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "6.1.200",
+    "pdfjs-dist": "6.2.108",
     "puppeteer-core": "^25.3.0",
     "unpdf": "^1.6.2"
   },
