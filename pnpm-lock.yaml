@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@happyvertical/ocr':
         specifier: ^0.61.1
-        version: 0.61.1(@types/node@24.13.3)(ws@8.21.0)(zod@3.25.76)
+        version: 0.61.1(@types/node@24.13.3)(supports-color@8.1.1)(ws@8.21.0)(zod@3.25.76)
       '@happyvertical/utils':
         specifier: ^0.80.1
         version: 0.80.1
@@ -64,14 +64,14 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
       vite:
-        specifier: 8.1.4
-        version: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
+        specifier: 8.1.6
+        version: 8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
       vite-plugin-dts:
         specifier: 5.0.3
-        version: 5.0.3(@microsoft/api-extractor@7.55.2(@types/node@24.13.3))(esbuild@0.28.1)(rolldown@1.1.5)(rollup@4.53.3)(typescript@6.0.3)(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
+        version: 5.0.3(@microsoft/api-extractor@7.55.2(@types/node@24.13.3))(esbuild@0.28.1)(rolldown@1.1.5)(rollup@4.53.3)(supports-color@8.1.1)(typescript@6.0.3)(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
       vitest:
         specifier: 4.1.10
-        version: 4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
     optionalDependencies:
       '@kreuzberg/node':
         specifier: ^4.10.2
@@ -1402,6 +1402,9 @@ packages:
   '@smithy/core@3.26.0':
     resolution: {integrity: sha512-mLUktFAn+Pa2agl1J7VgtYNFWCX8/b4GMJSK1hCu4YCvtBfM6F8Os3EP4ry+DFFlXOf3wyvlgXhuUdFoy52D3g==}
     engines: {node: '>=18.0.0'}
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.4.2':
     resolution: {integrity: sha512-18UMDMyrAbDcpmL1gLUA7ww0fRTcdCrSjSJOi2Sbld+tVjwD/pW+OAwjlScFLR7vvBnhZrIPQ7kVuTf1mnJLug==}
@@ -1621,6 +1624,11 @@ packages:
 
   '@volar/typescript@2.4.26':
     resolution: {integrity: sha512-N87ecLD48Sp6zV9zID/5yuS1+5foj0DfuYGdQ6KHj/IbKvyKv1zNX6VCmnKYwtmHadEO6mFc2EKISiu3RDPAvA==}
+    peerDependencies:
+      typescript: '*'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   acorn@8.15.0:
     resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
@@ -2871,8 +2879,8 @@ packages:
       vite:
         optional: true
 
-  vite@8.1.4:
-    resolution: {integrity: sha512-bTT9PsdWO+MQMNG9ZXIP/qM9wGh37DFxTV/sPq9cFpHr3w4jkgef032PkAL9jAqhk3Nz8NQw3O8n6/xFkqO4QQ==}
+  vite@8.1.6:
+    resolution: {integrity: sha512-aRAHIxx5SW5zc1sMqFwJU/t5qaFfXb5Hj0J7W0VXihu/X99+346tz6080tO1T1xVIJORX/b3zVTXGFqUXh35uw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -3766,9 +3774,9 @@ snapshots:
       '@shikijs/types': 3.23.0
       '@shikijs/vscode-textmate': 10.0.2
 
-  '@google/genai@1.50.1':
+  '@google/genai@1.50.1(supports-color@8.1.1)':
     dependencies:
-      google-auth-library: 10.9.0
+      google-auth-library: 10.9.0(supports-color@8.1.1)
       p-retry: 4.6.2
       protobufjs: 7.6.4
       ws: 8.21.0
@@ -3785,11 +3793,11 @@ snapshots:
 
   '@gutenye/ocr-models@1.4.2': {}
 
-  '@happyvertical/ai@0.80.1(ws@8.21.0)(zod@3.25.76)':
+  '@happyvertical/ai@0.80.1(supports-color@8.1.1)(ws@8.21.0)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.90.0(zod@3.25.76)
       '@aws-sdk/client-bedrock-runtime': 3.1034.0
-      '@google/genai': 1.50.1
+      '@google/genai': 1.50.1(supports-color@8.1.1)
       '@happyvertical/utils': 0.80.1
       openai: 6.34.0(ws@8.21.0)(zod@3.25.76)
     transitivePeerDependencies:
@@ -3800,11 +3808,11 @@ snapshots:
       - ws
       - zod
 
-  '@happyvertical/ocr@0.61.1(@types/node@24.13.3)(ws@8.21.0)(zod@3.25.76)':
+  '@happyvertical/ocr@0.61.1(@types/node@24.13.3)(supports-color@8.1.1)(ws@8.21.0)(zod@3.25.76)':
     dependencies:
       '@gutenye/ocr-common': 1.4.8
       '@gutenye/ocr-models': 1.4.2
-      '@happyvertical/ai': 0.80.1(ws@8.21.0)(zod@3.25.76)
+      '@happyvertical/ai': 0.80.1(supports-color@8.1.1)(ws@8.21.0)(zod@3.25.76)
       '@happyvertical/utils': 0.80.1
       onnxruntime-common: 1.27.0
       onnxruntime-node: 1.27.0
@@ -4629,7 +4637,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.2.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
+      vitest: 4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
 
   '@vitest/expect@4.1.10':
     dependencies:
@@ -4640,13 +4648,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.10(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))':
+  '@vitest/mocker@4.1.10(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
+      vite: 8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
 
   '@vitest/pretty-format@4.1.10':
     dependencies:
@@ -4678,11 +4686,13 @@ snapshots:
 
   '@volar/source-map@2.4.26': {}
 
-  '@volar/typescript@2.4.26':
+  '@volar/typescript@2.4.26(typescript@6.0.3)':
     dependencies:
       '@volar/language-core': 2.4.26
       path-browserify: 1.0.1
       vscode-uri: 3.1.0
+    optionalDependencies:
+      typescript: 6.0.3
 
   acorn@8.15.0: {}
 
@@ -4830,9 +4840,11 @@ snapshots:
 
   date-fns@4.4.0: {}
 
-  debug@4.4.3:
+  debug@4.4.3(supports-color@8.1.1):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 8.1.1
 
   define-data-property@1.1.4:
     dependencies:
@@ -5002,17 +5014,17 @@ snapshots:
   function-bind@1.1.2:
     optional: true
 
-  gaxios@7.1.5:
+  gaxios@7.1.5(supports-color@8.1.1):
     dependencies:
       extend: 3.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@8.1.1)
       node-fetch: 3.3.2
     transitivePeerDependencies:
       - supports-color
 
-  gcp-metadata@8.1.2:
+  gcp-metadata@8.1.2(supports-color@8.1.1):
     dependencies:
-      gaxios: 7.1.5
+      gaxios: 7.1.5(supports-color@8.1.1)
       google-logging-utils: 1.1.3
       json-bigint: 1.0.0
     transitivePeerDependencies:
@@ -5051,12 +5063,12 @@ snapshots:
       merge2: 1.4.1
       slash: 3.0.0
 
-  google-auth-library@10.9.0:
+  google-auth-library@10.9.0(supports-color@8.1.1):
     dependencies:
       base64-js: 1.5.1
       ecdsa-sig-formatter: 1.0.11
-      gaxios: 7.1.5
-      gcp-metadata: 8.1.2
+      gaxios: 7.1.5(supports-color@8.1.1)
+      gcp-metadata: 8.1.2(supports-color@8.1.1)
       google-logging-utils: 1.1.3
       jws: 4.0.1
     transitivePeerDependencies:
@@ -5081,10 +5093,10 @@ snapshots:
 
   html-escaper@2.0.2: {}
 
-  https-proxy-agent@7.0.6:
+  https-proxy-agent@7.0.6(supports-color@8.1.1):
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -5834,12 +5846,12 @@ snapshots:
     optionalDependencies:
       '@napi-rs/canvas': 0.1.100
 
-  unplugin-dts@1.0.3(@microsoft/api-extractor@7.55.2(@types/node@24.13.3))(esbuild@0.28.1)(rolldown@1.1.5)(rollup@4.53.3)(typescript@6.0.3)(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)):
+  unplugin-dts@1.0.3(@microsoft/api-extractor@7.55.2(@types/node@24.13.3))(esbuild@0.28.1)(rolldown@1.1.5)(rollup@4.53.3)(supports-color@8.1.1)(typescript@6.0.3)(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)):
     dependencies:
       '@rollup/pluginutils': 5.3.0(rollup@4.53.3)
-      '@volar/typescript': 2.4.26
+      '@volar/typescript': 2.4.26(typescript@6.0.3)
       compare-versions: 6.1.1
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@8.1.1)
       kolorist: 1.8.0
       local-pkg: 1.1.2
       magic-string: 0.30.21
@@ -5850,7 +5862,7 @@ snapshots:
       esbuild: 0.28.1
       rolldown: 1.1.5
       rollup: 4.53.3
-      vite: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
+      vite: 8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -5867,13 +5879,13 @@ snapshots:
 
   uuid@13.0.2: {}
 
-  vite-plugin-dts@5.0.3(@microsoft/api-extractor@7.55.2(@types/node@24.13.3))(esbuild@0.28.1)(rolldown@1.1.5)(rollup@4.53.3)(typescript@6.0.3)(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)):
+  vite-plugin-dts@5.0.3(@microsoft/api-extractor@7.55.2(@types/node@24.13.3))(esbuild@0.28.1)(rolldown@1.1.5)(rollup@4.53.3)(supports-color@8.1.1)(typescript@6.0.3)(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)):
     dependencies:
-      unplugin-dts: 1.0.3(@microsoft/api-extractor@7.55.2(@types/node@24.13.3))(esbuild@0.28.1)(rolldown@1.1.5)(rollup@4.53.3)(typescript@6.0.3)(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
+      unplugin-dts: 1.0.3(@microsoft/api-extractor@7.55.2(@types/node@24.13.3))(esbuild@0.28.1)(rolldown@1.1.5)(rollup@4.53.3)(supports-color@8.1.1)(typescript@6.0.3)(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
     optionalDependencies:
       '@microsoft/api-extractor': 7.55.2(@types/node@24.13.3)
       rollup: 4.53.3
-      vite: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
+      vite: 8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@rspack/core'
       - '@vue/language-core'
@@ -5883,7 +5895,7 @@ snapshots:
       - typescript
       - webpack
 
-  vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0):
+  vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.5
@@ -5898,10 +5910,10 @@ snapshots:
       tsx: 4.23.1
       yaml: 2.9.0
 
-  vitest@4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)):
+  vitest@4.1.10(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
+      '@vitest/mocker': 4.1.10(vite@8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -5918,7 +5930,7 @@ snapshots:
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.1.0
-      vite: 8.1.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
+      vite: 8.1.6(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.1)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.13.3
